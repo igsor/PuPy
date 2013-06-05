@@ -1,0 +1,13 @@
+PROTO bodyShape [
+	field SFVec3f box_size 0.2 0.04 0.075 # we will optimize only length and width - first and third coordinate
+]
+
+{
+ Shape {
+     appearance ABSplasticAppearance{} # this is a proto - ABSplasticAppearance.proto
+     geometry Box {
+            size IS box_size
+     } 
+ } 
+} 
+ 

@@ -1,0 +1,214 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Supervisor &mdash; Puppy Python Controller 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Puppy Python Controller 1.0 documentation" href="index.html" />
+    <link rel="next" title="Robot" href="robot.html" />
+    <link rel="prev" title="Welcome to Puppy Python Controller’s documentation!" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="robot.html" title="Robot"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to Puppy Python Controller’s documentation!"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Puppy Python Controller 1.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-PuPy">
+<span id="supervisor"></span><h1>Supervisor<a class="headerlink" href="#module-PuPy" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="PuPy.SupervisorCheck">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">SupervisorCheck</tt><a class="headerlink" href="#PuPy.SupervisorCheck" title="Permalink to this definition">¶</a></dt>
+<dd><p>A template for supervisor&#8217;s checks.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RevertCheck">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RevertCheck</tt><a class="headerlink" href="#PuPy.RevertCheck" title="Permalink to this definition">¶</a></dt>
+<dd><p>A template for supervisor&#8217;s revert checks.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RevertMaxIter">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RevertMaxIter</tt><big>(</big><em>max_iter</em><big>)</big><a class="headerlink" href="#PuPy.RevertMaxIter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Revert the simulation if an iteration limit is exceeded.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">max_iter</span></tt></dt>
+<dd>Maximum number of iterations.</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RevertTumbled">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RevertTumbled</tt><big>(</big><em>grace_time_ms=2000</em><big>)</big><a class="headerlink" href="#PuPy.RevertTumbled" title="Permalink to this definition">¶</a></dt>
+<dd><p>Revert the simulation if the robot has tumbled.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">grace_time</span></tt></dt>
+<dd>Let the robot run for some time before the simulation is reverted.
+In milliseconds</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RespawnCheck">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RespawnCheck</tt><big>(</big><em>reset_policy=0, arena_size=[0, 0, 0, 0]</em><big>)</big><a class="headerlink" href="#PuPy.RespawnCheck" title="Permalink to this definition">¶</a></dt>
+<dd><p>A template for supervisor&#8217;s respawn checks.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">reset_policy</span></tt></dt>
+<dd>Where to respawn the robot (0=center [0,0], 1=current position, 2=random position).
+In case of random respawn the <em>arena_size</em> needs to be provided.</dd>
+<dt><tt class="docutils literal"><span class="pre">arena_size</span></tt></dt>
+<dd>Size of the arena as list [min_x, max_x, min_z, max_z].</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RespawnTumbled">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RespawnTumbled</tt><big>(</big><em>grace_time_ms=2000</em>, <em>*args</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#PuPy.RespawnTumbled" title="Permalink to this definition">¶</a></dt>
+<dd><p>Respawn the robot if it has tumbled.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">grace_time</span></tt></dt>
+<dd>Let the robot run for some time before it is respawned.
+In milliseconds</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.RespawnOutOfArena">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">RespawnOutOfArena</tt><big>(</big><em>distance=2000, arena_size=[0, 0, 0, 0], *args, **kwargs</em><big>)</big><a class="headerlink" href="#PuPy.RespawnOutOfArena" title="Permalink to this definition">¶</a></dt>
+<dd><p>Respawn the robot if it comoes too close to the arena boundary.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">distance</span></tt></dt>
+<dd>The robot&#8217;s distance to the arena boundary.</dd>
+<dt><tt class="docutils literal"><span class="pre">arena_size</span></tt></dt>
+<dd>Size of the arena as list [min_x, max_x, min_z, max_z].</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.QuitMaxIter">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">QuitMaxIter</tt><big>(</big><em>max_iter</em><big>)</big><a class="headerlink" href="#PuPy.QuitMaxIter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Quit webots if an iteration limit is exceeded. (in milliseconds!)</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">max_iter</span></tt></dt>
+<dd>Maximum number of milliseconds.</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="PuPy.WebotsSupervisorMixin">
+<em class="property">class </em><tt class="descclassname">PuPy.</tt><tt class="descname">WebotsSupervisorMixin</tt><big>(</big><em>sampling_period_ms</em>, <em>checks=</em><span class="optional">[</span><span class="optional">]</span><big>)</big><a class="headerlink" href="#PuPy.WebotsSupervisorMixin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Webots supervisor &#8216;controller&#8217;. It actively probes the simulation,
+performs checks and reverts the simulation if necessary.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">sampling_period_ms</span></tt></dt>
+<dd>The period in milliseconds which the supervisor uses to observe
+the robot and possibly executes actions.</dd>
+<dt><tt class="docutils literal"><span class="pre">checks</span></tt></dt>
+<dd>A list of callables, which are executed in order in every sampling
+step. The return value of a check indicates if the simulation
+should be reverted.</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Welcome to Puppy Python Controller&#8217;s documentation!</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="robot.html"
+                        title="next chapter">Robot</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/supervisor.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="robot.html" title="Robot"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to Puppy Python Controller’s documentation!"
+             >previous</a> |</li>
+        <li><a href="index.html">Puppy Python Controller 1.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Matthias Baumgartner.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

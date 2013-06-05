@@ -1,0 +1,11 @@
+PROTO ABSplasticAppearance [
+
+]
+{
+   Appearance {
+	material Material {
+          diffuseColor 0.67451 0.619608 0.619608
+	  shininess 0.5
+	}
+   }
+}

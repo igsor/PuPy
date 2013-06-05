@@ -1,0 +1,11 @@
+Supervisor {
+  children [
+    DEF fromRobot Receiver {
+      name "fromRobotReceiver"
+    }
+    DEF toRobot Emitter {
+      name "toRobotEmitter"
+    }
+  ]
+  controller "genericSupervisor"
+}

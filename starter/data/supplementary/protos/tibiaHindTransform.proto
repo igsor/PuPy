@@ -1,0 +1,20 @@
+PROTO tibiaHindTransform [
+	field SFVec3f translation 0 -0.01 0  # the shift needs to be adapted based on the length of the tibia - box_size second coordinate
+	field SFVec3f box_size  0.013 0.08 0.017 # we will optimize only length - second coordinate
+]
+
+{
+  Transform {
+ 	translation IS translation
+            children [
+                Shape {
+                  appearance ABSplasticAppearance{} # this is a proto - ABSplasticAppearance.proto
+                  geometry Box {
+                    size IS box_size
+                  }
+		}
+             ]
+
+  }
+
+} 

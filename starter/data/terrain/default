@@ -1,0 +1,181 @@
+#VRML_SIM V6.0 utf8
+WorldInfo {
+  info [
+    "Author: Matej Hoffmann"
+    "AI lab Zurich"
+    "Date: Dec 2011"
+    "This model was created from the MiniDog model for ShanghAI (without STL eye candy) and scaled up to match Puppy's dimensions."
+  ]
+  title "Puppy"
+  CFM 0.0001
+  ERP 0.6
+  basicTimeStep 2
+  runRealTime TRUE
+  defaultDamping Damping {
+  }
+  contactProperties [
+    ContactProperties {
+      coulombFriction 10
+    }
+    ContactProperties {
+      material1 "BLUE_FOIL_MATERIAL"
+      coulombFriction 2
+    }
+    ContactProperties {
+      material1 "STYROFOAM_MATERIAL"
+      coulombFriction 9
+    }
+    ContactProperties {
+      material1 "CARDBOARD_MATERIAL"
+      coulombFriction 11
+    }
+    ContactProperties {
+      material1 "RUBBER_MATERIAL"
+      coulombFriction 20
+    }
+  ]
+}
+Viewpoint {
+  fieldOfView 0.795398
+  orientation -0.135393 0.814924 0.563531 2.7549
+  position 0.647245 3.19661 -1.18452
+  follow "puppy"
+}
+Background {
+  skyColor [
+    0.4 0.7 1
+  ]
+}
+DirectionalLight {
+  direction 0.05 -0.12 -0.06
+}
+DirectionalLight {
+  direction -0.07 -0.05 -0.06
+}
+MetricFloor {
+  color 0.521569 0.462745 0.462745
+}
+DEF BLUEFOIL_SOLID Solid {
+  translation 0.5 0 -0.5
+  children [
+    DEF BLUE_FOIL_SHAPE Shape {
+      appearance Appearance {
+        material DEF BLUE_FOIL_MATERIAL Material {
+        }
+        texture ImageTexture {
+          url [
+            "textures/bluefoil.jpg"
+          ]
+        }
+      }
+      geometry DEF BOX_1by1 Box {
+        size 1 0.01 1
+      }
+    }
+  ]
+  contactMaterial "BLUE_FOIL_MATERIAL"
+  boundingObject USE BLUE_FOIL_SHAPE
+}
+DEF CARDBOARD_SOLID Solid {
+  translation 0.5 0 0.5
+  children [
+    DEF CARDBOARD_SHAPE Shape {
+      appearance Appearance {
+        material DEF CARDBOARD_MATERIAL Material {
+        }
+        texture ImageTexture {
+          url [
+            "textures/cardboard.jpg"
+          ]
+        }
+      }
+      geometry USE BOX_1by1
+    }
+  ]
+  contactMaterial "CARDBOARD_MATERIAL"
+  boundingObject USE CARDBOARD_SHAPE
+}
+DEF RUBBER_SOLID Solid {
+  translation -0.5 0 -0.5
+  children [
+    DEF RUBBER_SHAPE Shape {
+      appearance Appearance {
+        material DEF RUBBER_MATERIAL Material {
+        }
+        texture ImageTexture {
+          url [
+            "textures/rubber.jpg"
+          ]
+        }
+        textureTransform TextureTransform {
+        }
+      }
+      geometry USE BOX_1by1
+    }
+  ]
+  contactMaterial "RUBBER_MATERIAL"
+  boundingObject USE RUBBER_SHAPE
+}
+DEF STYROFOAM_SOLID Solid {
+  translation -0.5 0 0.5
+  children [
+    DEF STYROFOAM_SHAPE Shape {
+      appearance Appearance {
+        material DEF STYROFOAM_MATERIAL Material {
+          diffuseColor 0.901961 0.901961 0.980392
+        }
+        texture ImageTexture {
+          url [
+            "textures/styrofoam.jpg"
+          ]
+        }
+      }
+      geometry USE BOX_1by1
+    }
+  ]
+  contactMaterial "STYROFOAM_MATERIAL"
+  boundingObject USE STYROFOAM_SHAPE
+}
+DEF FRONT_WALL Solid {
+  translation 1 0 0
+  children [
+    DEF WALL1_SHAPE Shape {
+      appearance Appearance {
+        material Material {
+        }
+        texture ImageTexture {
+          url [
+            "textures/wall.jpg"
+          ]
+        }
+      }
+      geometry Box {
+        size 0.1 1 2
+      }
+    }
+  ]
+  boundingObject USE WALL1_SHAPE
+}
+DEF BACK_WALL Solid {
+  translation -1 0 0
+  children [
+    USE WALL1_SHAPE
+  ]
+  boundingObject USE WALL1_SHAPE
+}
+DEF LEFT_WALL Solid {
+  translation 0 0 -1.05
+  rotation 0 1 0 1.5708
+  children [
+    USE WALL1_SHAPE
+  ]
+  boundingObject USE WALL1_SHAPE
+}
+DEF RIGHT_WALL Solid {
+  translation 0 0 1.05
+  rotation 0 1 0 1.5708
+  children [
+    USE WALL1_SHAPE
+  ]
+  boundingObject USE WALL1_SHAPE
+}

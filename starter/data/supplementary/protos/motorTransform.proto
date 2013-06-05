@@ -1,0 +1,18 @@
+PROTO motorTransform [
+	field SFVec3f translation 0 0 0
+	# for HR would be: field SFVec3f translation -0.05 -0.009 0.035  # the shift needs to be adapted based on the body size
+]
+
+{
+  Transform {
+     translation IS translation
+     children [
+         Shape {
+           appearance ABSplasticAppearance{} # this is a proto - ABSplasticAppearance.proto
+           geometry Box {
+                 size 0.04 0.02 0.038
+           }
+         }
+     ]
+  } 
+} 
