@@ -20,7 +20,8 @@ EOF
 }
 
 WEBOTS="/usr/local/bin/webots"
-BASE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/data"
+BASE="$(dirname "$(readlink "${BASH_SOURCE[0]}")")/data"
+
 TRG=
 
 PCTRL=
@@ -117,6 +118,8 @@ PPTH=`readlink -f $PCTRL`
 SPTH=`readlink -f $SCTRL`
 #cat $BASE/controllers/generic/generic.py | sed "s:^CMD='':CMD='$PPTH':" > $TRG/controllers/puppyController/puppyController.py
 #cat $BASE/controllers/generic/generic.py | sed "s:^CMD='':CMD='$SPTH':" > $TRG/controllers/supervisorController/supervisorController.py
+rm $TRG/controllers/puppyController/puppyController.py 2>/dev/null
+rm $TRG/controllers/supervisorController/supervisorController.py 2>/dev/null
 ln -s $PPTH $TRG/controllers/puppyController/puppyController.py
 ln -s $SPTH $TRG/controllers/supervisorController/supervisorController.py
 

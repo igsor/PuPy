@@ -9,10 +9,11 @@ Welcome to Puppy Python Controller's documentation!
 Contents:
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
     
     supervisor
     robot
+    resources
 
 
 

@@ -30,6 +30,10 @@ class WebotsPuppyMixin:
         least *ctrl_period_ms* / *motor_period_ms* steps. In each step,
         it must return a list of four motor targets.
         
+        The actor's interface is defined by :py:class:`PuppyActor`. Note
+        however, that the interface is organized such that the class
+        structure may be obsolete.
+        
     ``sampling_period_ms``
         The period according to which sensors are sampled.
         In milliseconds.
@@ -144,7 +148,7 @@ class WebotsPuppyMixin:
             f((self._s_accel, self._s_gyro, self._s_compass, self._s_gps))
     
     def run(self):
-        """Main controller loop. Runs infinitely if not aborted by
+        """Main controller loop. Runs infinitely unless aborted by
         webots.
         
         The controller operates on a sense, think, act cycle. In every
@@ -153,61 +157,117 @@ class WebotsPuppyMixin:
         machine (think) and its result used for updating the motors
         (act).
         
+        .. versionchanged:: 1365
+            After version 1365 (10eb3eed-6697-4d8c-9aac-32ebf1d36239),
+            the behaviour of the main loop was changed: There's an
+            initialization of the motor target and the target executed
+            before the measurement (so long, it was executed after). We
+            need to discuss and test this to be more specific about the
+            behaviour.
+        
         .. todo::
-            doc what exactly (w.r.t. time) the actor gets and how current_target
-            and sensor readouts are related (also w.r.t time).
+            doc what exactly (w.r.t. time) the actor gets and how
+            current_target and sensor readouts are related
+            (also w.r.t time). Be specific about the order of
+            measurements/targets/execution. Also update the doc
+            in :py:class:`PuppyActor`.
         
         """
         sys.stdout.flush()
         current_time = 0
         loop_wait = gcd(self.motor_period, self.sampling_period)
         epoch = Queue.deque(maxlen=self.ctrl_period/self.sampling_period)
+        # first epoch targets
+        motor_targets = self.actor(dict(), current_time, current_time + self.ctrl_period, self.motor_period)
+        
+        ## NOTE: if act after sense, we need these two lines as initial target
+        current_target = motor_targets.next()
+        for servo, trg in zip(self.motors, current_target): servo.setPosition(trg)
+        
         while True:
             # advance
             if self.step(loop_wait) == -1: break # otherwise 1st sensor read-outs are nan
+            current_time += loop_wait
             
-            # next action
-            if current_time % self.ctrl_period == 0:
-                ep = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
-                if self.observer_noise is not None:
-                    if isinstance(self.observer_noise, dict):
-                        # dict case, individual noise per sensor
-                        for k in self.observer_noise: # len(obs_noise) <= len(ep)
-                            if k in ep and k not in ('trg0','trg1','trg2','trg3'):
-                                ep[k] += np.random.normal(scale=self.observer_noise[k], size=ep[k].shape)
-                    else:
-                        # scalar case, same noise for all sensors
-                        for k in ep:
-                            if k in ('trg0','trg1','trg2','trg3'): continue
-                            ep[k] += np.random.normal(scale=self.observer_noise, size=ep[k].shape)
-                    
-                motor_targets = self.actor(ep, current_time, current_time + self.ctrl_period, self.motor_period)
-                epoch.clear()
+            ## NOTE ##
+            # act here to have the target which will be applied in the next step
             
-            # set motor target
-            if current_time % self.motor_period == 0:
-                current_target = motor_targets.next()
-                
-                if self.motor_noise is not None:
-                    if isinstance(self.motor_noise, int) or isinstance(self.motor_noise, float):
-                        # scalar case, same noise for all motors
-                        noise = np.random.normal(scale=self.motor_noise, size=(4,))
-                    else:
-                        # list case, individual noise per motor
-                        noise = [np.random.normal(scale=sig) for sig in self.motor_noise]
-                    
-                    current_target = map(operator.add, current_target, noise)
-                
-                for servo, trg in zip(self.motors, current_target):
-                    servo.setPosition(trg)
-            
+            # sense
             # update observations
             if current_time % self.sampling_period == 0:
                 sensors_current = self.readout.next()
                 epoch.append( current_target + sensors_current )
             
-            current_time += loop_wait
+            # think
+            # next action
+            if current_time % self.ctrl_period == 0:
+                ep = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
+                if self.observer_noise is not None: self._add_observer_noise(ep)
+                
+                motor_targets = self.actor(ep, current_time, current_time + self.ctrl_period, self.motor_period)
+                epoch.clear()
+            
+            ## NOTE ##
+            # act here to have the target which was applied in the last step (= target that lead to current observation)
+            # in this case, the target initialization must be uncommented
+            # the two act schemes are shifted, i.e. (act before sense)[1:] == (act after sense)[:-1]
+            
+            # act
+            # set motor target
+            if current_time % self.motor_period == 0:
+                current_target = motor_targets.next()
+                if self.motor_noise is not None: current_target = self._add_motor_noise(current_target)
+                
+                for servo, trg in zip(self.motors, current_target):
+                    servo.setPosition(trg)
+        
+        # teardown
+        self._post_run_hook(current_time)
     
+    def _post_run_hook(self, current_time_ms):
+        """Cleanup after the main loop has terminated.
+        
+        The main loop may exit (e.g. if the simulation is reverted) and
+        the robot instance closed in the process. Since the destructor
+        is not called by default, this hook provides a method to clean
+        up any remaining resources and execute post-run code.
+        
+        The default action is to delete the actor, thus envoking its
+        destructor (if any).
+        
+        ``current_time``
+            Time when the main loop was interrupted, in milliseconds.
+            
+        """
+        del self.actor
+    
+    def _add_observer_noise(self, ep):
+        """Add observer noise, according to *observer_noise*.
+        """
+        if isinstance(self.observer_noise, dict):
+            # dict case, individual noise per sensor
+            for k in self.observer_noise: # len(obs_noise) <= len(ep)
+                if k in ep and k not in ('trg0','trg1','trg2','trg3'):
+                    ep[k] += np.random.normal(scale=self.observer_noise[k], size=ep[k].shape)
+                else:
+                    # scalar case, same noise for all sensors
+                    for k in ep:
+                        if k in ('trg0','trg1','trg2','trg3'): continue
+                        ep[k] += np.random.normal(scale=self.observer_noise, size=ep[k].shape)
+        return ep
+    
+    def _add_motor_noise(self, current_target):
+        """Add motor noise, according to *motor_noise*.
+        """
+        if isinstance(self.motor_noise, int) or isinstance(self.motor_noise, float):
+            # scalar case, same noise for all motors
+            noise = np.random.normal(scale=self.motor_noise, size=(4,))
+        else:
+            # list case, individual noise per motor
+            noise = [np.random.normal(scale=sig) for sig in self.motor_noise]
+        current_target = map(operator.add, current_target, noise)
+        return current_target
+
 class WebotsSupervisorMixin:
     """Webots supervisor 'controller'. It actively probes the simulation,
     performs checks and reverts the simulation if necessary.
@@ -217,9 +277,9 @@ class WebotsSupervisorMixin:
         the robot and possibly executes actions.
     
     ``checks``
-        A list of callables, which are executed in order in every sampling
-        step. The return value of a check indicates if the simulation
-        should be reverted.
+        A list of callables, which are executed in order in every
+        sampling step. A check's interface must be compliant with
+        the one of :py:class:`SupervisorCheck`.
     
     """
     def __init__(self, sampling_period_ms, checks=[]):
@@ -249,8 +309,29 @@ class WebotsSupervisorMixin:
             # advance
             if self.step(self.loop_wait) == -1: break
             self.numIter += self.loop_wait
-
+        
+        self._post_run_hook()
+    
     def _pre_revert_hook(self, reason):
+        """A custom function (default empty) that is executed just
+        before the simulation is reverted.
+        
+        ``reason``
+            A string identifying the check which requested the revert.
+        
+        """
+        pass
+    
+    def _post_run_hook(self):
+        """Cleanup after the main loop has terminated.
+        
+        The main loop may exit (e.g. if the simulation is reverted) and
+        the supervisor instance closed in the process. Since the
+        destructor is not called by default, this hook provides a
+        method to clean up any remaining resources and execute
+        post-run code.
+        
+        """
         pass
 
 class SupervisorCheck:
@@ -259,17 +340,13 @@ class SupervisorCheck:
         """Evalute the check and implement the consequences.
         
         ``supervisor``
-            The supervisor instance
+            The supervisor instance. For communication back to the
+            robot, an *emitter* is available through
+            *supervisor.emitter*.
         
         """
         raise NotImplementedError()
-    def __str__(self):
-        raise NotImplementedError()
-    def revert(self, supervisor):
-        print "Revert simulation (%s)" % (str(self))
-        supervisor._pre_revert_hook(str(self))
-        supervisor.simulationRevert()
-        
+
 class RevertCheck(SupervisorCheck):
     """A template for supervisor's revert checks."""
     def __call__(self, supervisor):
@@ -281,27 +358,26 @@ class RevertCheck(SupervisorCheck):
         
         """
         raise NotImplementedError()
-    def __str__(self):
-        raise NotImplementedError()
+    
     def revert(self, supervisor):
         """Revert the simulation.
         """
         print "Revert simulation (%s)" % (str(self))
         supervisor._pre_revert_hook(str(self))
         supervisor.simulationRevert()
-        
+
 class RevertTumbled(RevertCheck):
     """Revert the simulation if the robot has tumbled.
     
-    ``grace_time``
-        Let the robot run for some time before the simulation is reverted.
-        In milliseconds
+    ``grace_time_ms``
+        Let the robot run after tumbling for some time before the
+        simulation is reverted. In milliseconds.
     
     """
     def __init__(self, grace_time_ms=2000):
         self.grace_time = grace_time_ms
         self._queue = Queue.deque(maxlen=5)
-        
+    
     def __call__(self, supervisor):
         if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
             self._queue.append(supervisor.numIter)
@@ -313,22 +389,25 @@ class RevertTumbled(RevertCheck):
                 # revert
                 self._queue.clear()
                 self.revert(supervisor)
+    
     def __str__(self):
         return "Tumbled"
 
 class RevertMaxIter(RevertCheck):
-    """Revert the simulation if an iteration limit is exceeded.
+    """Revert the simulation if a maximum duration is exceeded.
     
-    ``max_iter``
-        Maximum number of iterations.
+    ``max_duration_ms``
+        Maximum time a simulation may run, in milliseconds. After
+        this limit, the simulation is reverted.
     
     """
-    def __init__(self, max_iter):
-        self.max_iter = max_iter
+    def __init__(self, max_duration_ms):
+        self.max_iter = max_duration_ms
     
     def __call__(self, supervisor):
         if supervisor.numIter > self.max_iter:
             self.revert(supervisor)
+    
     def __str__(self):
         return "MaxIter"
 
@@ -336,7 +415,10 @@ class RespawnCheck(SupervisorCheck):
     """A template for supervisor's respawn checks.
     
     ``reset_policy``
-        Where to respawn the robot (0=center [0,0], 1=current position, 2=random position).
+        Where to respawn the robot (0=center [0,0], 1=current position,
+        2=random position). Instead of literals, use
+        *RespawnCheck._reset_center*, *RespawnCheck._reset_current*
+        and *RespawnCheck._reset_random*.
         In case of random respawn the *arena_size* needs to be provided.
     
     ``arena_size``
@@ -346,9 +428,11 @@ class RespawnCheck(SupervisorCheck):
     _reset_center = 0
     _reset_current = 1
     _reset_random = 2
+    
     def __init__(self, reset_policy=_reset_center, arena_size=[0,0,0,0]):
         self.reset_policy = reset_policy
         self.arena_size = arena_size
+    
     def __call__(self, supervisor):
         """Evalute the check, call ``respawn`` iff the supervisor should be
         respawned (reset to a new position).
@@ -358,8 +442,10 @@ class RespawnCheck(SupervisorCheck):
         
         """
         raise NotImplementedError()
+    
     def __str__(self):
         raise NotImplementedError()
+    
     def respawn(self, supervisor):
         """Reset the robots position.
         """
@@ -373,6 +459,7 @@ class RespawnCheck(SupervisorCheck):
         elif self.reset_policy==self._reset_random:
             new_pos = [np.random.randint(self.arena_size[0], self.arena_size[1]),
                        np.random.randint(self.arena_size[2], self.arena_size[3])]
+        
         robotDef.getField('rotation').setSFRotation(rot)
         robotDef.getField('translation').setSFVec3f([new_pos[0], 0.13, new_pos[1]]) # when tumbling, remain on same position
         supervisor.emitter.send('reset')
@@ -381,16 +468,16 @@ class RespawnCheck(SupervisorCheck):
 class RespawnTumbled(RespawnCheck):
     """Respawn the robot if it has tumbled.
     
-    ``grace_time``
-        Let the robot run for some time before it is respawned.
-        In milliseconds
+    ``grace_time_ms``
+        Let the robot run for some time after tumbling before it is
+        respawned. In milliseconds
     
     """
-    def __init__(self, grace_time_ms=2000, *args, **kwargs):
-        RespawnCheck.__init__(self, *args, **kwargs)
+    def __init__(self, grace_time_ms=2000, **kwargs):
+        RespawnCheck.__init__(self, **kwargs)
         self.grace_time = grace_time_ms
         self._queue = Queue.deque(maxlen=5)
-        
+    
     def __call__(self, supervisor):
         if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
             self._queue.append(supervisor.numIter)
@@ -403,6 +490,7 @@ class RespawnTumbled(RespawnCheck):
                 self._queue.clear()
                 supervisor.emitter.send('tumbled')
                 self.respawn(supervisor)
+    
     def __str__(self):
         return "Tumbled"
 
@@ -416,34 +504,35 @@ class RespawnOutOfArena(RespawnCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=[0,0,0,0], *args, **kwargs):
-        RespawnCheck.__init__(self, *args, **kwargs)
+    def __init__(self, distance=2000, arena_size=[0,0,0,0], **kwargs):
+        RespawnCheck.__init__(self, arena_size=arena_size, **kwargs)
         self.distance = distance
-        self.arena_size = arena_size
-        
+    
     def __call__(self, supervisor):
         posCurr = supervisor.getFromDef('puppy').getPosition()
         if (posCurr[0]>self.arena_size[1]-self.distance or posCurr[0]<self.arena_size[0]+self.distance 
          or posCurr[2]>self.arena_size[3]-self.distance or posCurr[2]<self.arena_size[2]+self.distance):
             supervisor.emitter.send('out_of_arena')
             self.respawn(supervisor)
+    
     def __str__(self):
         return "Out-Of-Arena"
 
 class QuitMaxIter(SupervisorCheck):
-    """Quit webots if an iteration limit is exceeded. (in milliseconds!)
+    """Quit webots if a time limit is exceeded. (in milliseconds!)
     
-    ``max_iter``
-        Maximum number of milliseconds.
+    ``max_duration_ms``
+        Maximum running time, in milliseconds.
     
     """
-    def __init__(self, max_iter):
-        self.max_iter = max_iter
+    def __init__(self, max_duration_ms):
+        self.max_iter = max_duration_ms
     
     def __call__(self, supervisor):
         if supervisor.numIter > self.max_iter:
             print "Quit simulation (%s)" % (str(self))
             supervisor.simulationQuit(0)
+    
     def __str__(self):
         return "MaxIter"
 
@@ -470,15 +559,18 @@ def mixin(cls_mixin, cls_base):
     return WebotsMixin
 
 def builder(cls_mixin, cls_base, *args, **kwargs):
-    """Set up a mixin class and return an instance of it."""
+    """Set up a mixin class and return an instance of it.
+    """
     cls = mixin(cls_mixin, cls_base)
     return cls(*args, **kwargs)
 
 def robotBuilder(cls_base, *args, **kwargs):
-    """Return an instance of a webots puppy robot."""
+    """Return an instance of a webots puppy robot.
+    """
     return builder(WebotsPuppyMixin, cls_base, *args, **kwargs)
 
 def supervisorBuilder(cls_base, *args, **kwargs):
-    """Return an instance of a webots puppy supervisor."""
+    """Return an instance of a webots puppy supervisor.
+    """
     return builder(WebotsSupervisorMixin, cls_base, *args, **kwargs)
 

@@ -55,12 +55,22 @@ class PuppyActor:
         Note that the motor targets are one-step ahead in the sense that
         they are applied but have not yet been executed.
         
+        .. versionchanged:: 1365
+            There's some discussion about this point. After commit
+            1365 (10eb3eed-6697-4d8c-9aac-32ebf1d36239), the behaviour
+            is different: The sensor readings are the product of
+            applying the target. May again be changed later (after more
+            discussion).
+        
+        
         Further, note that the :py:meth:`dict` may be empty (this is
         guaranteed at least once in the simulator initialization).
     
     ``time_start_ms``
         The (simulated) time from which on the motor target will be
-        applied.
+        applied. *time_start_ms* is weakly positive and strictly
+        monotonic increasing (meaning that it is zero only in the very
+        first call).
     
     ``time_end_ms``
         The (simulated) time up to which the motor target must at least
