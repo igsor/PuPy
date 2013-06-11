@@ -15,6 +15,7 @@ class WebotsPuppyMixin:
     """
     
     To use this class with webots, it has to be set up like so:
+    
     >>> import rrl
     >>> import controller
     >>> cls = rrl.mixin(rrl.WebotsPuppyMixin, controller.Robot)
@@ -109,12 +110,11 @@ class WebotsPuppyMixin:
     _s_gyro = 'gyro'
     _s_compass = 'compass'
     _s_gps = 'puppyGPS'
-
+    
     _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
     _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
     _s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
     _s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
-
     
     def __readout_gen(self):
         """Produce a sensor readout generator."""
@@ -152,6 +152,10 @@ class WebotsPuppyMixin:
         out (sense). This information is passed to the control decision
         machine (think) and its result used for updating the motors
         (act).
+        
+        .. todo::
+            doc what exactly (w.r.t. time) the actor gets and how current_target
+            and sensor readouts are related (also w.r.t time).
         
         """
         sys.stdout.flush()
@@ -229,7 +233,7 @@ class WebotsSupervisorMixin:
         
         The routine runs its checks and reverts the simulation if
         indicated. The iterations counter is made available to the
-        checks through *Supervisor.numIter*.
+        checks through *WebotsSupervisorMixin.numIter*.
         
         Note, that reverting the simulation restarts the whole simulation
         which also reloads the supervisor.
@@ -477,5 +481,4 @@ def robotBuilder(cls_base, *args, **kwargs):
 def supervisorBuilder(cls_base, *args, **kwargs):
     """Return an instance of a webots puppy supervisor."""
     return builder(WebotsSupervisorMixin, cls_base, *args, **kwargs)
-
 

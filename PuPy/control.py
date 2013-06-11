@@ -8,12 +8,16 @@ class Gait:
     """Motor target generator, using predefined gait_switcher.
     
     The motor signal follows the parametrised sine
-        A * sin(2*pi*f*x + p) + B
+    
+        :math:`A  \sin(2 \pi f x + p) + B`
+    
     with the parameters A, f, p, B
     
     ``params``
-        *dict* holding the parameters:
+        :py:meth:`dict` holding the parameters:
+        
          keys:   amplitude, frequency, phase, offset
+         
          values: 4-tuples holding the parameter values. The order is
                  front-left, front-right, rear-left, rear-right
     
@@ -35,7 +39,7 @@ class Gait:
         return self.name
 
 class PuppyActor:
-    """Template class for an actor, used in *WebotsPuppyMixin*.
+    """Template class for an actor, used in :py:class:`WebotsPuppyMixin`.
     
     The actor is called after every control period, when a new sequence
     of motor targets is required. It is expected to return an iterator
@@ -51,8 +55,8 @@ class PuppyActor:
         Note that the motor targets are one-step ahead in the sense that
         they are applied but have not yet been executed.
         
-        Further, note that the *dict* may be empty (this is guaranteed
-        at least once in the simulator initialization).
+        Further, note that the :py:meth:`dict` may be empty (this is
+        guaranteed at least once in the simulator initialization).
     
     ``time_start_ms``
         The (simulated) time from which on the motor target will be
@@ -67,8 +71,13 @@ class PuppyActor:
         the next motor target is applied.
     
     If the targets are represented by a list, it must at least have
+    
+        .. :math:`\\frac{ \\text{time_end_ms} - \\text{time_start_ms} }{ \\text{step_size_ms} }`
+    
         (*time_end_ms* - *time_start_ms*) / *step_size_ms*
+    
     items and it has to be returned as iterator, as in
+    
         >>> iter(myList)
     
     """
@@ -76,9 +85,9 @@ class PuppyActor:
         raise NotImplementedError()
 
 class RandomGaitControl(PuppyActor):
-    """From a list of available gait_switcher, randomly select one."""
-    def __init__(self, gait_switcher):
-        self.gaits = gait_switcher[:]
+    """From a list of available gaits, randomly select one."""
+    def __init__(self, gaits):
+        self.gaits = gaits[:]
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
         gait = random.choice(self.gaits)
         print gait
@@ -92,7 +101,7 @@ class ConstantGaitControl(PuppyActor):
         return self.gait.iter(time_start_ms, step_size)
 
 class SequentialGaitControl(PuppyActor):
-    """Execute a predefined sequence of gait_switcher.
+    """Execute a predefined sequence of gaits.
     
     Note that it's assumed that *gait_iter* does not terminate
     permaturely.
