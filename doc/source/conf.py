@@ -283,3 +283,8 @@ epub_copyright = u'2013, Matthias Baumgartner'
 
 # Allow duplicate toc entries.
 #epub_tocdup = True
+
+# -- Custom config, added by hand  --------------------------------------------
+
+todo_include_todos=True
+

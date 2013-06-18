@@ -556,6 +556,7 @@ def mixin(cls_mixin, cls_base):
         def __init__(self, *args, **kwargs):
             cls_base.__init__(self)
             cls_mixin.__init__(self, *args, **kwargs)
+    
     return WebotsMixin
 
 def builder(cls_mixin, cls_base, *args, **kwargs):

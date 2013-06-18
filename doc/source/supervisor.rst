@@ -9,6 +9,17 @@ Supervisor
 .. contents::
 
 
+Introduction
+------------
+
+.. todo::
+    - What the supervisor is used for
+    - What can be achieved with it
+    - Typical use cases
+    - Explain the supervisor and the check facility
+    - Links to patterns (strategy, chain of responsibility, ...)
+
+
 Example
 -------
 
@@ -16,7 +27,7 @@ The supervisor facility is intended to be used from within the
 webots simulator [WEBOTS]_. The simulator automatically appends the
 controller module to `Python's <http://www.python.org>`_ search path,
 such that the :py:class:`Supervisor` class can be imported. Of course,
-the :py:module`PuPy` module is also made available:
+the :py:mod:`PuPy` module is also made available:
 
 >>> from controller import Supervisor
 >>> import PuPy
@@ -46,13 +57,11 @@ simulation is somehow aborted.
 >>> s.run()
 
 
-Interfaces
-----------
+Reference
+---------
 
 .. autoclass:: WebotsSupervisorMixin
     :members:
-
-.. autofunction:: supervisorBuilder
 
 .. autoclass:: SupervisorCheck
     :members:
