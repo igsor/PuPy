@@ -11,10 +11,18 @@ Contents:
 .. toctree::
     :maxdepth: 1
     
+    intro
+    webots
     supervisor
     robot
+    control
+    
+    examples
+    download
+    license
     resources
-
+    
+    todopg
 
 
 Indices and tables
