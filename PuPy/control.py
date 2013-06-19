@@ -4,7 +4,7 @@ from math import sin,pi
 import numpy as np
 import time
 
-class Gait:
+class Gait(object):
     """Motor target generator, using predefined gait_switcher.
     
     The motor signal follows the parametrised sine
@@ -38,7 +38,7 @@ class Gait:
     def __str__(self):
         return self.name
 
-class PuppyActor:
+class PuppyActor(object):
     """Template class for an actor, used in :py:class:`WebotsPuppyMixin`.
     
     The actor is called after every control period, when a new sequence
@@ -122,13 +122,19 @@ class SequentialGaitControl(PuppyActor):
         gait = self.gait_iter.next()
         return gait.iter(time_start_ms, step_size)
 
-class PuppyCollector(PuppyActor):
+class _PuppyCollector_h5py(PuppyActor):
     """Collect sensor readouts and store them in a file.
+    HDF5 is written through the h5py module.
     
-    The data is stored in the *HDF5* format. For each simulation run,
+    The data is stored in the [HDF5]_ format. For each simulation run,
     there's a group, identified by a running number. Within each group,
     the sensor data is stored in exclusive datasets, placed under the
     sensor's name.
+    
+    ``actor``
+        The :py:class:`PuppyCollector` works as intermediate actor, it
+        does not implement a policy itself. For this, another ``actor``
+        is required. It must match the :py:class:`PuppyActor` interface.
     
     ``expfile``
         Path to the file into which the experimental data should be
@@ -175,16 +181,19 @@ class PuppyCollector(PuppyActor):
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
 
-class PuppyCollectorTables(PuppyActor):
+class _PuppyCollector_pytables(PuppyActor):
     """Collect sensor readouts and store them in a file.
+    HDF5 is written through the PyTables module.
     
-    .. note::
-        Uses PyTables instead of h5py
-    
-    The data is stored in the *HDF5* format. For each simulation run,
+    The data is stored in the [HDF5]_ format. For each simulation run,
     there's a group, identified by a running number. Within each group,
     the sensor data is stored in exclusive datasets, placed under the
     sensor's name.
+    
+    ``actor``
+        The :py:class:`PuppyCollector` works as intermediate actor, it
+        does not implement a policy itself. For this, another ``actor``
+        is required. It must match the :py:class:`PuppyActor` interface.
     
     ``expfile``
         Path to the file into which the experimental data should be
@@ -227,3 +236,31 @@ class PuppyCollectorTables(PuppyActor):
                 self.grp._v_children[k].append(epoch[k])
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
+
+class PuppyCollector(_PuppyCollector_h5py):
+    """Collect sensor readouts and store them in a file.
+    
+    The data is stored in the [HDF5]_ format. For each simulation run,
+    there's a group, identified by a running number. Within each group,
+    the sensor data is stored in exclusive datasets, placed under the
+    sensor's name.
+    
+    .. note::
+        This class abstracts interface from implementation. Internally,
+        either the HDF5 interface from [PyTables]_ or [h5py]_ may be
+        used.
+    
+    ``actor``
+        The :py:class:`PuppyCollector` works as intermediate actor, it
+        does not implement a policy itself. For this, another ``actor``
+        is required. It must match the :py:class:`PuppyActor` interface.
+    
+    ``expfile``
+        Path to the file into which the experimental data should be
+        stored.
+    
+    ``headers``
+        Additional headers, stored with the current experiment.
+        A *dict* is expected. Default is None (no headers).
+    """
+    pass

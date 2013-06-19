@@ -40,8 +40,3 @@ Reference
 
 .. autoclass:: PuppyCollector
     :members:
-    :show-inheritance:
-
-.. autoclass:: PuppyCollectorTables
-    :members:
-    :show-inheritance:

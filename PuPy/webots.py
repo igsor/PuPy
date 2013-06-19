@@ -334,7 +334,7 @@ class WebotsSupervisorMixin:
         """
         pass
 
-class SupervisorCheck:
+class SupervisorCheck(object):
     """A template for supervisor's checks."""
     def __call__(self, supervisor):
         """Evalute the check and implement the consequences.
