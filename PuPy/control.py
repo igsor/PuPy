@@ -161,6 +161,17 @@ class _PuppyCollector_h5py(PuppyActor):
         
         print "Using storage", name
     
+    def set_header(self, name, data):
+        """Add custom header ``data`` to the current group. The data is
+        stored under key ``name``. If the key is already in use, the
+        value will be overwritten.
+        """
+        amngr = h5py.AttributeManager(self.grp)
+        if name in amngr:
+            amngr.modify(name, data)
+        else:
+            amngr.create(name, data)
+    
     def __del__(self):
         self.fh.close()
     
@@ -173,7 +184,6 @@ class _PuppyCollector_h5py(PuppyActor):
             if k not in self.grp:
                 maxshape = tuple([None] * len(epoch[k].shape))
                 self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=maxshape)
-                #self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=None)
             else:
                 N = epoch[k].shape[0]
                 K = self.grp[k].shape[0]
@@ -224,6 +234,13 @@ class _PuppyCollector_pytables(PuppyActor):
     
     def __del__(self):
         self.fh.close()
+    
+    def set_header(self, name, data):
+        """Add custom header ``data`` to the current group. The data is
+        stored under key ``name``. If the key is already in use, the
+        value will be overwritten.
+        """
+        self.grp._f_setattr(name, data)
     
     # if RevertTumbling is used:
     #  last epoch will not be written since it is not necessarily complete;
