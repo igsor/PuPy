@@ -171,9 +171,9 @@ class _PuppyCollector_h5py(PuppyActor):
         # write epoch to dataset
         for k in epoch:
             if k not in self.grp:
-                #maxshape = tuple([None] * len(epoch[k].shape))
-                #self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=maxshape)
-                self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=None)
+                maxshape = tuple([None] * len(epoch[k].shape))
+                self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=maxshape)
+                #self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=None)
             else:
                 N = epoch[k].shape[0]
                 K = self.grp[k].shape[0]
