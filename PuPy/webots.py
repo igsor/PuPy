@@ -11,7 +11,7 @@ import sys
 # todo: supervisor revert name (string)
 # todo: action name might be interesting (e.g. when observing gaits)
 
-class WebotsPuppyMixin:
+class WebotsPuppyMixin(object):
     """
     
     To use this class with webots, it has to be set up like so:
@@ -268,7 +268,7 @@ class WebotsPuppyMixin:
         current_target = map(operator.add, current_target, noise)
         return current_target
 
-class WebotsSupervisorMixin:
+class WebotsSupervisorMixin(object):
     """Webots supervisor 'controller'. It actively probes the simulation,
     performs checks and reverts the simulation if necessary.
     
@@ -333,6 +333,23 @@ class WebotsSupervisorMixin:
         
         """
         pass
+
+class RecordingSupervisor(WebotsSupervisorMixin):
+    """Record the simulation into a webots animation file stored at
+    ``animFilename``. The file extension should be 'wva'.
+    
+    .. todo::
+        Webots (PRO 6.4.4) crashes when the simulation is stopped
+    
+    """
+    def __init__(self, animFilename, *args, **kwargs):
+        super(RecordingSupervisor, self).__init__(*args, **kwargs)
+        self.startAnimation(animFilename)
+        
+    def _post_run_hook(self):
+        """Stop the animation.
+        """
+        self.stopAnimation()
 
 class SupervisorCheck(object):
     """A template for supervisor's checks."""

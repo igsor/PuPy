@@ -1,7 +1,6 @@
 
 import random
 from math import sin,pi
-import numpy as np
 import time
 
 class Gait(object):
@@ -157,7 +156,8 @@ class _PuppyCollector_h5py(PuppyActor):
         amngr = h5py.AttributeManager(self.grp)
         amngr.create('time', time.time())
         if headers is not None:
-            for k in headers: amngr.create(k, headers[k])
+            for k in headers:
+                amngr.create(k, headers[k])
         
         print "Using storage", name
     
@@ -171,13 +171,15 @@ class _PuppyCollector_h5py(PuppyActor):
         # write epoch to dataset
         for k in epoch:
             if k not in self.grp:
-                N, = epoch[k].shape
-                self.grp.create_dataset(k, shape=(N,), data=epoch[k], chunks=True, maxshape=(None,))
+                #maxshape = tuple([None] * len(epoch[k].shape))
+                #self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=maxshape)
+                self.grp.create_dataset(k, shape=epoch[k].shape, data=epoch[k], chunks=True, maxshape=None)
             else:
-                N, = self.grp[k].shape
-                K, = epoch[k].shape
-                self.grp[k].resize(size=(N+K,))
-                self.grp[k][N:] = epoch[k]
+                N = epoch[k].shape[0]
+                K = self.grp[k].shape[0]
+                self.grp[k].resize(size=N+K, axis=0)
+                self.grp[k][K:] = epoch[k]
+        
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
 
@@ -230,10 +232,10 @@ class _PuppyCollector_pytables(PuppyActor):
         # write epoch to dataset
         for k in epoch:
             if k not in self.grp:
-                N, = epoch[k].shape
-                self.fh.create_earray(self.grp, k, chunkshape=(N,), obj=epoch[k])
+                self.fh.create_earray(self.grp, k, chunkshape=epoch[k].shape, obj=epoch[k])
             else:
                 self.grp._v_children[k].append(epoch[k])
+        
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
 
