@@ -66,7 +66,7 @@ class WebotsPuppyMixin(object):
         Use None to discard the noise (default).
     
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, noise_ctrl=None, noise_obs=None):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, noise_ctrl=None, noise_obs=None, event_period_ms=20, event_handler=None):
         # action
         self.actor = actor
         
@@ -108,6 +108,8 @@ class WebotsPuppyMixin(object):
         
         # init supervisor receiver
         self.receiver = self.getReceiver('fromSupervisorReceiver')
+        self.event_period = event_period_ms
+        self.event_handler = event_handler
     
     # Sensor names
     _s_accel = 'accelerometer'
@@ -175,7 +177,9 @@ class WebotsPuppyMixin(object):
         """
         sys.stdout.flush()
         current_time = 0
+        # gcd is associative and commutative
         loop_wait = gcd(self.motor_period, self.sampling_period)
+        loop_wait = gcd(self.event_period, loop_wait)
         epoch = Queue.deque(maxlen=self.ctrl_period/self.sampling_period)
         # first epoch targets
         motor_targets = self.actor(dict(), current_time, current_time + self.ctrl_period, self.motor_period)
@@ -188,6 +192,11 @@ class WebotsPuppyMixin(object):
             # advance
             if self.step(loop_wait) == -1: break # otherwise 1st sensor read-outs are nan
             current_time += loop_wait
+            
+            if current_time % self.event_period == 0:
+                # check messages in receiver
+                if self.event_handler is not None and self.receiver.getQueueLength() > 1:
+                    self.event_handler(self.receiver.nextPacket())
             
             ## NOTE ##
             # act here to have the target which will be applied in the next step

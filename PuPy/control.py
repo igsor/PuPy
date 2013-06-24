@@ -147,6 +147,8 @@ class _PuppyCollector_h5py(PuppyActor):
     def __init__(self, actor, expfile, headers=None):
         # set actor
         self.actor = actor
+        if actor is None:
+            self.actor = lambda epo, start, end, step: None
         
         # create experiment storage
         import h5py
@@ -219,6 +221,8 @@ class _PuppyCollector_pytables(PuppyActor):
     def __init__(self, actor, expfile, headers=None):
         # set actor
         self.actor = actor
+        if actor is None:
+            self.actor = lambda epo, start, end, step: None
         
         # create experiment storage
         import tables
