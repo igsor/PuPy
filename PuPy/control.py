@@ -51,16 +51,11 @@ class PuppyActor(object):
         are returned as dict, with the sensor name as key and a
         numpy array of observations as value.
         
-        Note that the motor targets are one-step ahead in the sense that
-        they are applied but have not yet been executed.
+        Note that the motor targets are the ones that have been applied,
+        i.e. those that lead up to the sensor measurements. Imagine this
+        cycle::
         
-        .. versionchanged:: 1365
-            There's some discussion about this point. After commit
-            1365 (10eb3eed-6697-4d8c-9aac-32ebf1d36239), the behaviour
-            is different: The sensor readings are the product of
-            applying the target. May again be changed later (after more
-            discussion).
-        
+            trg[i] -> move robot -> sensors[i] -> trg[i+1] -> ...
         
         Further, note that the :py:meth:`dict` may be empty (this is
         guaranteed at least once in the simulator initialization).

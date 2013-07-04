@@ -15,8 +15,8 @@ gait_params = {
 # gaits
 gait = PuPy.Gait(gait_params)
 
-# emitter
-def emitter(msg):
+# receiver callback
+def recv(msg):
     print msg
 
 # actor
@@ -24,4 +24,4 @@ actor = PuPy.ConstantGaitControl(gait)
 
 
 # robot
-PuPy.robotBuilder(Robot, actor, event_period_ms=50, event_handler=emitter).run()
+PuPy.robotBuilder(Robot, actor, event_period_ms=50, event_handler=recv).run()

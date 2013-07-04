@@ -12,15 +12,8 @@ import sys
 # todo: action name might be interesting (e.g. when observing gaits)
 
 class WebotsPuppyMixin(object):
-    """
-    
-    To use this class with webots, it has to be set up like so:
-    
-    >>> import rrl
-    >>> import controller
-    >>> cls = rrl.mixin(rrl.WebotsPuppyMixin, controller.Robot)
-    >>> inst = cls(args)
-    >>> inst.run()
+    """Webots Puppy controller. It samples all sensors and periodically
+    consults an ``actor`` for control decisions.
     
     ``actor``
         A function which determines the motor targets for the next
@@ -64,6 +57,17 @@ class WebotsPuppyMixin(object):
         sensors or each individual one, respectively. In the latter
         approach, the dict keys have to correspond to the sensor name.
         Use None to discard the noise (default).
+    
+    ``event_period_ms``
+        The period in milliseconds that is used for polling the
+        receiver. Should optimally be a multiple of the control or
+        sampling period or the Supervisor's sampling period.
+    
+    ``event_handler``
+        Register a callback that is executed whenever a new message
+        arrives at the receiver. The handler is executed for every
+        message individually (even if there are several). It must only
+        take one argument, the message.
     
     """
     def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, noise_ctrl=None, noise_obs=None, event_period_ms=20, event_handler=None):
@@ -160,6 +164,16 @@ class WebotsPuppyMixin(object):
         machine (think) and its result used for updating the motors
         (act).
         
+        The ``actor`` is provided with all sensor readings, starting
+        from the previous call up to the current one. The very last
+        readout is equal to the current state of the robot.
+        The motor targets (denoted by trg) are the ones that have been
+        applied in the previous step. This can be interpreted as the
+        target that caused the sensor readings. Also note, that the
+        motor targets returned by the ``actor`` will be effective
+        immediately, i.e. the first target will be set right after the
+        ``actor`` was called.
+        
         .. versionchanged:: 1365
             After version 1365 (10eb3eed-6697-4d8c-9aac-32ebf1d36239),
             the behaviour of the main loop was changed: There's an
@@ -167,13 +181,6 @@ class WebotsPuppyMixin(object):
             before the measurement (so long, it was executed after). We
             need to discuss and test this to be more specific about the
             behaviour.
-        
-        .. todo::
-            doc what exactly (w.r.t. time) the actor gets and how
-            current_target and sensor readouts are related
-            (also w.r.t time). Be specific about the order of
-            measurements/targets/execution. Also update the doc
-            in :py:class:`PuppyActor`.
         
         """
         sys.stdout.flush()
@@ -235,6 +242,7 @@ class WebotsPuppyMixin(object):
         
         # teardown
         self._post_run_hook(current_time)
+        return self
     
     def _post_run_hook(self, current_time_ms):
         """Cleanup after the main loop has terminated.
@@ -323,6 +331,7 @@ class WebotsSupervisorMixin(object):
             self.numIter += self.loop_wait
         
         self._post_run_hook()
+        return self
     
     def _pre_revert_hook(self, reason):
         """A custom function (default empty) that is executed just
