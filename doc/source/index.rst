@@ -6,12 +6,40 @@
 Welcome to Puppy Python Controller's documentation!
 ===================================================
 
+.. todo::
+    - about the project
+    - core concepts
+    - dependencies
+    - focus
+    - goals
+    - achievements
+
+.. mynote:
+    about
+        puppy, webots, python
+        easy access to puppy
+        control-view
+    
+    concepts
+        python, supervisor, robot
+        or move to the other sections
+    
+    dependencies
+        python, numpy, webots, h5py or pyTables
+    
+    focus
+        
+    
+    goals/achievements
+        
+
+
+
 Contents:
 
 .. toctree::
     :maxdepth: 1
     
-    intro
     webots
     supervisor
     robot

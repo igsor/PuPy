@@ -24,7 +24,7 @@ Example
 -------
 
 The supervisor facility is intended to be used from within the
-webots simulator [WEBOTS]_. The simulator automatically appends the
+webots simulator [Webots]_. The simulator automatically appends the
 controller module to `Python's <http://www.python.org>`_ search path,
 such that the :py:class:`Supervisor` class can be imported. Of course,
 the :py:mod:`PuPy` module is also made available:

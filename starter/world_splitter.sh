@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: Copy stuff like textures, prototypes, ...
+
 usage()
 {
 cat << EOF
