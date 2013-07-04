@@ -110,6 +110,7 @@ class WebotsPuppyMixin(object):
         self.receiver = self.getReceiver('fromSupervisorReceiver')
         self.event_period = event_period_ms
         self.event_handler = event_handler
+        self.receiver.enable(self.event_period)
     
     # Sensor names
     _s_accel = 'accelerometer'
@@ -193,10 +194,12 @@ class WebotsPuppyMixin(object):
             if self.step(loop_wait) == -1: break # otherwise 1st sensor read-outs are nan
             current_time += loop_wait
             
-            if current_time % self.event_period == 0:
+            # first serve receiver callback
+            if current_time % self.event_period == 0 and self.event_handler is not None:
                 # check messages in receiver
-                if self.event_handler is not None and self.receiver.getQueueLength() > 1:
-                    self.event_handler(self.receiver.nextPacket())
+                while self.receiver.getQueueLength() > 0:
+                    self.event_handler(self.receiver.getData())
+                    self.receiver.nextPacket()
             
             ## NOTE ##
             # act here to have the target which will be applied in the next step
