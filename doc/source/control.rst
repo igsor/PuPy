@@ -11,15 +11,34 @@ Introduction
 
 Given the :py:class:`supervisor <WebotsSupervisorMixin>` and
 :py:class:`robot <WebotsPuppyMixin>`, a working controller can be set up.
-As described on the :doc:`robot` page, the this can be achieved by
+As described on the :doc:`robot` page, this is achieved by
 implementing an ``actor``, compliant with the :py:class:`PuppyActor`
-interface. Although this task is generally problem dependent, some
-typical actors have been prepared. The most common control setup is
-based on :py:class:`Gaits <Gait>`. 
+interface. Again, note that the interface is desined such that it may
+be matched by either a class or a function.
 
-.. todo::
-    - How to set up a controller
-    - Explain basic controllers
+The actor gets the sensor measurements of the last epoch (i.e. since
+the previous execution of the actor) and information about the timeframe
+of the next action. Its purpose is to come up with a a sequence of motor
+targets that will be applied next. Read the reference of
+:py:class:`WebotsPuppyMixin` carefully, so that you understand the setup
+and effect of the timings.
+
+Although the task of implementing a controller is generally problem
+dependent, some typical actors have been prepared. The most common
+control setup is based on :py:class:`Gaits <Gait>`. A gait is a sinewave,
+expressed through its parameters (amplitude, frequency, phase and offset).
+Some parametersets that induce some specific walking patterns have
+already been found in various works. Yet, the gait itself does not
+implement a controller but only a series of motor targets. Besides that,
+the controller may also decide which gait to apply out of several
+choices. Or it might be desired to switch the gait during the
+experiment. Some actors have been prepared for this purpose, their
+reference and explanation can be found below.
+
+One actor that deserves special attention is :py:class:`PuppyCollector`.
+It is a transparent actor, meaning that it delegates the action decision
+to another one but only stores the sensory data in a file (also see the
+`Example`_).
 
 Example
 -------
@@ -88,19 +107,24 @@ webots or from the data log.
 Once some data has been gathered and the simulation is stopped, the
 data file may be inspected. Note that the code below is not part of the
 control script anymore but a seperate python instance
-(e.g. in a script or interactively).
+(e.g. in a script or interactively). Note that this piece of code
+employs [matplotlib]_ for plotting.
 
 >>> import h5py, pylab
 >>> f = h5py.File('/tmp/puppy_sim.hdf5','r')
->>> pylab.plot(f['0']['trg0'][:200], 'k', label='FL')
->>> pylab.plot(f['0']['trg1'][:200], 'r', label='FR')
->>> pylab.plot(f['0']['trg2'][:200], 'g', label='HL')
->>> pylab.plot(f['0']['trg3'][:200], 'b', label='HR')
+>>> pylab.plot(f['0']['trg0'][:500], 'k', label='FL')
+>>> pylab.plot(f['0']['trg2'][:500], 'b', label='HL')
 >>> pylab.title('Motor targets')
 >>> pylab.xlabel('time')
+>>> pylab.legend(loc=0)
 >>> pylab.show()
 
+In the appearing window, the target of the front and hind left motor is
+displayed. It can be observed that the shape of the target curves change
+between the two gaits defined. The figure below gives an example of this.
 
+.. image:: _static/puppy_gait.png
+    :width: 500
 
 Reference
 ---------

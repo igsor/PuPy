@@ -32,7 +32,7 @@ return an iterator for the next of motor targets. These are incrementally
 enforced on the motors, such that the ``actor`` may indeed define the robot's
 behaviour. To do so, the sensor readings between two calls are supplied.
 To see how this works exactly, consult the documentation of
-:py:class:`WebotsPuppyMixin` and :py:class`PuppyActor`.
+:py:class:`WebotsPuppyMixin` and :py:class:`PuppyActor`.
 
 The :py:class:`WebotsPuppyMixin` abstracts from the Webots API in the sense
 that it takes care of initialization and readout of Puppy's sensors. Thus,

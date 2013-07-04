@@ -17,3 +17,5 @@ Resources
 .. [NumPy] `<http://numpy.scipy.org/>`_
 
 .. [Python] `<http://www.python.org>`_
+
+.. [matplotlib] `<http://matplotlib.org/>`_
