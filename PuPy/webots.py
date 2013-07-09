@@ -192,10 +192,11 @@ class WebotsPuppyMixin(object):
         # first epoch targets
         motor_targets = self.actor(dict(), current_time, current_time + self.ctrl_period, self.motor_period)
         
-        ## NOTE: if act after sense, we need these two lines as initial target
+        # initial target
         current_target = motor_targets.next()
         for servo, trg in zip(self.motors, current_target): servo.setPosition(trg)
         
+        # main loop
         while True:
             # advance
             if self.step(loop_wait) == -1: break # otherwise 1st sensor read-outs are nan
@@ -207,9 +208,6 @@ class WebotsPuppyMixin(object):
                 while self.receiver.getQueueLength() > 0:
                     self.event_handler(self.receiver.getData())
                     self.receiver.nextPacket()
-            
-            ## NOTE ##
-            # act here to have the target which will be applied in the next step
             
             # sense
             # update observations
@@ -225,11 +223,6 @@ class WebotsPuppyMixin(object):
                 
                 motor_targets = self.actor(ep, current_time, current_time + self.ctrl_period, self.motor_period)
                 epoch.clear()
-            
-            ## NOTE ##
-            # act here to have the target which was applied in the last step (= target that lead to current observation)
-            # in this case, the target initialization must be uncommented
-            # the two act schemes are shifted, i.e. (act before sense)[1:] == (act after sense)[:-1]
             
             # act
             # set motor target
