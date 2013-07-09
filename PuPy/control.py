@@ -1,6 +1,7 @@
-
+"""
+"""
 import random
-from math import sin,pi
+from math import sin, pi
 import time
 
 class Gait(object):
@@ -23,10 +24,13 @@ class Gait(object):
     """
     def __init__(self, params, name=None):
         self.params = params
-        if name is None: name = 'Unknown gait'
+        if name is None:
+            name = 'Unknown gait'
         self.name = name
+    
     def __iter__(self):
         return self.iter(0, 20)
+    
     def iter(self, time_start_ms, step):
         """Return the motor target sequence in the interval [*time_start_ms*, *time_end_ms*]."""
         params = zip(self.params['amplitude'], self.params['frequency'], self.params['phase'], self.params['offset'])
@@ -34,6 +38,7 @@ class Gait(object):
         while True:
             current_time_ms += step
             yield [A * sin(2.0 * pi * (freq * current_time_ms / 1e3 - phase)) + offset for A, freq, phase, offset in params]
+    
     def __str__(self):
         return self.name
 
@@ -91,7 +96,9 @@ class PuppyActor(object):
 class RandomGaitControl(PuppyActor):
     """From a list of available gaits, randomly select one."""
     def __init__(self, gaits):
+        super(RandomGaitControl, self).__init__()
         self.gaits = gaits[:]
+    
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
         gait = random.choice(self.gaits)
         print gait
@@ -100,7 +107,9 @@ class RandomGaitControl(PuppyActor):
 class ConstantGaitControl(PuppyActor):
     """Given a gait, always apply it."""
     def __init__(self, gait):
+        super(ConstantGaitControl, self).__init__()
         self.gait = gait
+    
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
         return self.gait.iter(time_start_ms, step_size)
 
@@ -111,7 +120,9 @@ class SequentialGaitControl(PuppyActor):
     permaturely.
     """
     def __init__(self, gait_iter):
+        super(SequentialGaitControl, self).__init__()
         self.gait_iter = gait_iter
+    
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
         gait = self.gait_iter.next()
         return gait.iter(time_start_ms, step_size)
@@ -141,6 +152,7 @@ class _PuppyCollector_h5py(PuppyActor):
     """
     def __init__(self, actor, expfile, headers=None):
         # set actor
+        super(_PuppyCollector_h5py, self).__init__()
         self.actor = actor
         if actor is None:
             self.actor = lambda epo, start, end, step: None
@@ -163,6 +175,7 @@ class _PuppyCollector_h5py(PuppyActor):
         stored under key ``name``. If the key is already in use, the
         value will be overwritten.
         """
+        import h5py
         amngr = h5py.AttributeManager(self.grp)
         if name in amngr:
             amngr.modify(name, data)
@@ -215,6 +228,7 @@ class _PuppyCollector_pytables(PuppyActor):
     """
     def __init__(self, actor, expfile, headers=None):
         # set actor
+        super(_PuppyCollector_pytables, self).__init__()
         self.actor = actor
         if actor is None:
             self.actor = lambda epo, start, end, step: None
@@ -227,7 +241,8 @@ class _PuppyCollector_pytables(PuppyActor):
         
         self.grp._f_setattr('time', time.time())
         if headers is not None:
-            for k in headers: self.grp._f_setattr(k, headers[k])
+            for k in headers:
+                self.grp._f_setattr(k, headers[k])
         
         print "Using storage", name
     

@@ -1,4 +1,7 @@
+"""
 
+
+"""
 from fractions import gcd
 import operator
 import Queue
@@ -77,7 +80,8 @@ class WebotsPuppyMixin(object):
         # init time constants
         self.sampling_period = sampling_period_ms
         self.ctrl_period = ctrl_period_ms
-        if motor_period_ms is None: motor_period_ms = sampling_period_ms
+        if motor_period_ms is None:
+            motor_period_ms = sampling_period_ms
         self.motor_period = motor_period_ms
         
         # check assumptions on periods
@@ -102,10 +106,10 @@ class WebotsPuppyMixin(object):
         self.getGyro(self._s_gyro).enable(self.sampling_period)
         self.getCompass(self._s_compass).enable(self.sampling_period)
         self.getGPS(self._s_gps).enable(self.sampling_period)
-        for s in self._s_hip + self._s_knee:
-            self.getServo(s).enablePosition(self.sampling_period)
-        for t in self._s_touch:
-            self.getTouchSensor(t).enable(self.sampling_period)
+        for servo in self._s_hip + self._s_knee:
+            self.getServo(servo).enablePosition(self.sampling_period)
+        for touch in self._s_touch:
+            self.getTouchSensor(touch).enable(self.sampling_period)
         
         # init sensor readout function
         self.readout = self.__readout_gen()
@@ -130,11 +134,11 @@ class WebotsPuppyMixin(object):
     def __readout_gen(self):
         """Produce a sensor readout generator."""
         single_dim, three_dim = [], []
-        for s in self._s_hip + self._s_knee:
-            single_dim.append(self.getServo(s).getPosition)
+        for servo in self._s_hip + self._s_knee:
+            single_dim.append(self.getServo(servo).getPosition)
         
-        for t in self._s_touch:
-            single_dim.append(self.getTouchSensor(t).getValue)
+        for touch in self._s_touch:
+            single_dim.append(self.getTouchSensor(touch).getValue)
         
         three_dim.append(self.getAccelerometer(self._s_accel).getValues)
         three_dim.append(self.getGyro(self._s_gyro).getValues)
@@ -143,7 +147,7 @@ class WebotsPuppyMixin(object):
         
         while True:
             singles = map(lambda f:f(), single_dim)
-            three = map(lambda (x,z,y):[x,y,z], map(lambda f:f(), three_dim))
+            three = map(lambda (x, z, y):[x, y, z], map(lambda f:f(), three_dim))
             yield singles + reduce(operator.add, three)
     
     def readout_labels(self):
@@ -194,12 +198,14 @@ class WebotsPuppyMixin(object):
         
         # initial target
         current_target = motor_targets.next()
-        for servo, trg in zip(self.motors, current_target): servo.setPosition(trg)
+        for servo, trg in zip(self.motors, current_target):
+            servo.setPosition(trg)
         
         # main loop
         while True:
             # advance
-            if self.step(loop_wait) == -1: break # otherwise 1st sensor read-outs are nan
+            if self.step(loop_wait) == -1:
+                break # otherwise 1st sensor read-outs are nan
             current_time += loop_wait
             
             # first serve receiver callback
@@ -219,7 +225,8 @@ class WebotsPuppyMixin(object):
             # next action
             if current_time % self.ctrl_period == 0:
                 ep = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
-                if self.observer_noise is not None: self._add_observer_noise(ep)
+                if self.observer_noise is not None:
+                    self._add_observer_noise(ep)
                 
                 motor_targets = self.actor(ep, current_time, current_time + self.ctrl_period, self.motor_period)
                 epoch.clear()
@@ -228,7 +235,8 @@ class WebotsPuppyMixin(object):
             # set motor target
             if current_time % self.motor_period == 0:
                 current_target = motor_targets.next()
-                if self.motor_noise is not None: current_target = self._add_motor_noise(current_target)
+                if self.motor_noise is not None:
+                    current_target = self._add_motor_noise(current_target)
                 
                 for servo, trg in zip(self.motors, current_target):
                     servo.setPosition(trg)
@@ -260,12 +268,13 @@ class WebotsPuppyMixin(object):
         if isinstance(self.observer_noise, dict):
             # dict case, individual noise per sensor
             for k in self.observer_noise: # len(obs_noise) <= len(ep)
-                if k in ep and k not in ('trg0','trg1','trg2','trg3'):
+                if k in ep and k not in ('trg0', 'trg1', 'trg2', 'trg3'):
                     ep[k] += np.random.normal(scale=self.observer_noise[k], size=ep[k].shape)
                 else:
                     # scalar case, same noise for all sensors
                     for k in ep:
-                        if k in ('trg0','trg1','trg2','trg3'): continue
+                        if k in ('trg0', 'trg1', 'trg2', 'trg3'):
+                            continue
                         ep[k] += np.random.normal(scale=self.observer_noise, size=ep[k].shape)
         return ep
     
@@ -299,6 +308,7 @@ class WebotsSupervisorMixin(object):
         self.checks = checks
         self.loop_wait = sampling_period_ms
         self.emitter = self.getEmitter('toRobotEmitter')
+        self.num_iter = 0
         
     def run(self):
         """Supervisor's main loop. Call this function upon script
@@ -306,13 +316,13 @@ class WebotsSupervisorMixin(object):
         
         The routine runs its checks and reverts the simulation if
         indicated. The iterations counter is made available to the
-        checks through *WebotsSupervisorMixin.numIter*.
+        checks through *WebotsSupervisorMixin.num_iter*.
         
         Note, that reverting the simulation restarts the whole simulation
         which also reloads the supervisor.
         
         """
-        self.numIter = 0
+        self.num_iter = 0
         while True:
             
             # run checks
@@ -320,8 +330,9 @@ class WebotsSupervisorMixin(object):
                 check(self)
             
             # advance
-            if self.step(self.loop_wait) == -1: break
-            self.numIter += self.loop_wait
+            if self.step(self.loop_wait) == -1:
+                break
+            self.num_iter += self.loop_wait
         
         self._post_run_hook()
         return self
@@ -350,15 +361,15 @@ class WebotsSupervisorMixin(object):
 
 class RecordingSupervisor(WebotsSupervisorMixin):
     """Record the simulation into a webots animation file stored at
-    ``animFilename``. The file extension should be 'wva'.
+    ``anim_filename``. The file extension should be 'wva'.
     
     .. todo::
         Webots (PRO 6.4.4) crashes when the simulation is stopped
     
     """
-    def __init__(self, animFilename, *args, **kwargs):
+    def __init__(self, anim_filename, *args, **kwargs):
         super(RecordingSupervisor, self).__init__(*args, **kwargs)
-        self.startAnimation(animFilename)
+        self.startAnimation(anim_filename)
         
     def _post_run_hook(self):
         """Stop the animation.
@@ -406,12 +417,13 @@ class RevertTumbled(RevertCheck):
     
     """
     def __init__(self, grace_time_ms=2000):
+        super(RevertTumbled, self).__init__()
         self.grace_time = grace_time_ms
         self._queue = Queue.deque(maxlen=5)
     
     def __call__(self, supervisor):
         if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.numIter)
+            self._queue.append(supervisor.num_iter)
             if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
                 
                 # let grace period pass
@@ -433,10 +445,11 @@ class RevertMaxIter(RevertCheck):
     
     """
     def __init__(self, max_duration_ms):
+        super(RevertMaxIter, self).__init__()
         self.max_iter = max_duration_ms
     
     def __call__(self, supervisor):
-        if supervisor.numIter > self.max_iter:
+        if supervisor.num_iter > self.max_iter:
             self.revert(supervisor)
     
     def __str__(self):
@@ -460,7 +473,8 @@ class RespawnCheck(SupervisorCheck):
     _reset_current = 1
     _reset_random = 2
     
-    def __init__(self, reset_policy=_reset_center, arena_size=[0,0,0,0]):
+    def __init__(self, reset_policy=_reset_center, arena_size=[0, 0, 0, 0]):
+        super(RespawnCheck, self).__init__()
         self.reset_policy = reset_policy
         self.arena_size = arena_size
     
@@ -480,19 +494,19 @@ class RespawnCheck(SupervisorCheck):
     def respawn(self, supervisor):
         """Reset the robots position.
         """
-        robotDef = supervisor.getFromDef('puppy')
-        posCurr = robotDef.getPosition()
+        robot_def = supervisor.getFromDef('puppy')
+        pos_curr = robot_def.getPosition()
         rot = [0, 1, 0, float(np.random.rand()*2.*np.pi)]
-        if self.reset_policy==self._reset_center:
-            new_pos = [0,0]
-        elif self.reset_policy==self._reset_current:
-            new_pos = posCurr[::2]
-        elif self.reset_policy==self._reset_random:
+        if self.reset_policy == self._reset_center:
+            new_pos = [0, 0]
+        elif self.reset_policy == self._reset_current:
+            new_pos = pos_curr[::2]
+        elif self.reset_policy == self._reset_random:
             new_pos = [np.random.randint(self.arena_size[0], self.arena_size[1]),
                        np.random.randint(self.arena_size[2], self.arena_size[3])]
         
-        robotDef.getField('rotation').setSFRotation(rot)
-        robotDef.getField('translation').setSFVec3f([new_pos[0], 0.13, new_pos[1]]) # when tumbling, remain on same position
+        robot_def.getField('rotation').setSFRotation(rot)
+        robot_def.getField('translation').setSFVec3f([new_pos[0], 0.13, new_pos[1]]) # when tumbling, remain on same position
         supervisor.emitter.send('reset')
         print "Respawn robot (%s)" % (str(self))
 
@@ -511,7 +525,7 @@ class RespawnTumbled(RespawnCheck):
     
     def __call__(self, supervisor):
         if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.numIter)
+            self._queue.append(supervisor.num_iter)
             if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
                 
                 # let grace period pass
@@ -535,14 +549,14 @@ class RespawnOutOfArena(RespawnCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=[0,0,0,0], **kwargs):
+    def __init__(self, distance=2000, arena_size=[0, 0, 0, 0], **kwargs):
         RespawnCheck.__init__(self, arena_size=arena_size, **kwargs)
         self.distance = distance
     
     def __call__(self, supervisor):
-        posCurr = supervisor.getFromDef('puppy').getPosition()
-        if (posCurr[0]>self.arena_size[1]-self.distance or posCurr[0]<self.arena_size[0]+self.distance 
-         or posCurr[2]>self.arena_size[3]-self.distance or posCurr[2]<self.arena_size[2]+self.distance):
+        pos_curr = supervisor.getFromDef('puppy').getPosition()
+        if (pos_curr[0]>self.arena_size[1]-self.distance or pos_curr[0]<self.arena_size[0]+self.distance 
+         or pos_curr[2]>self.arena_size[3]-self.distance or pos_curr[2]<self.arena_size[2]+self.distance):
             supervisor.emitter.send('out_of_arena')
             self.respawn(supervisor)
     
@@ -557,10 +571,11 @@ class QuitMaxIter(SupervisorCheck):
     
     """
     def __init__(self, max_duration_ms):
+        super(QuitMaxIter, self).__init__()
         self.max_iter = max_duration_ms
     
     def __call__(self, supervisor):
-        if supervisor.numIter > self.max_iter:
+        if supervisor.num_iter > self.max_iter:
             print "Quit simulation (%s)" % (str(self))
             supervisor.simulationQuit(0)
     
@@ -584,6 +599,7 @@ def mixin(cls_mixin, cls_base):
     
     """
     class WebotsMixin(cls_mixin, cls_base):
+        """Trivial class to correctly set up the webots mixin."""
         def __init__(self, *args, **kwargs):
             cls_base.__init__(self)
             cls_mixin.__init__(self, *args, **kwargs)
