@@ -224,11 +224,11 @@ class WebotsPuppyMixin(object):
             # think
             # next action
             if current_time % self.ctrl_period == 0:
-                ep = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
+                sensor_epoch = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
                 if self.observer_noise is not None:
-                    self._add_observer_noise(ep)
+                    self._add_observer_noise(sensor_epoch)
                 
-                motor_targets = self.actor(ep, current_time, current_time + self.ctrl_period, self.motor_period)
+                motor_targets = self.actor(sensor_epoch, current_time, current_time + self.ctrl_period, self.motor_period)
                 epoch.clear()
             
             # act
@@ -262,21 +262,21 @@ class WebotsPuppyMixin(object):
         """
         del self.actor
     
-    def _add_observer_noise(self, ep):
+    def _add_observer_noise(self, epoch):
         """Add observer noise, according to *observer_noise*.
         """
         if isinstance(self.observer_noise, dict):
             # dict case, individual noise per sensor
-            for k in self.observer_noise: # len(obs_noise) <= len(ep)
-                if k in ep and k not in ('trg0', 'trg1', 'trg2', 'trg3'):
-                    ep[k] += np.random.normal(scale=self.observer_noise[k], size=ep[k].shape)
+            for k in self.observer_noise: # len(obs_noise) <= len(epoch)
+                if k in epoch and k not in ('trg0', 'trg1', 'trg2', 'trg3'):
+                    epoch[k] += np.random.normal(scale=self.observer_noise[k], size=epoch[k].shape)
                 else:
                     # scalar case, same noise for all sensors
-                    for k in ep:
+                    for k in epoch:
                         if k in ('trg0', 'trg1', 'trg2', 'trg3'):
                             continue
-                        ep[k] += np.random.normal(scale=self.observer_noise, size=ep[k].shape)
-        return ep
+                        epoch[k] += np.random.normal(scale=self.observer_noise, size=epoch[k].shape)
+        return epoch
     
     def _add_motor_noise(self, current_target):
         """Add motor noise, according to *motor_noise*.
@@ -304,7 +304,9 @@ class WebotsSupervisorMixin(object):
         the one of :py:class:`SupervisorCheck`.
     
     """
-    def __init__(self, sampling_period_ms, checks=[]):
+    def __init__(self, sampling_period_ms, checks=None):
+        if checks is None:
+            checks = []
         self.checks = checks
         self.loop_wait = sampling_period_ms
         self.emitter = self.getEmitter('toRobotEmitter')
@@ -473,7 +475,7 @@ class RespawnCheck(SupervisorCheck):
     _reset_current = 1
     _reset_random = 2
     
-    def __init__(self, reset_policy=_reset_center, arena_size=[0, 0, 0, 0]):
+    def __init__(self, reset_policy=_reset_center, arena_size=(0, 0, 0, 0)):
         super(RespawnCheck, self).__init__()
         self.reset_policy = reset_policy
         self.arena_size = arena_size
@@ -549,7 +551,7 @@ class RespawnOutOfArena(RespawnCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=[0, 0, 0, 0], **kwargs):
+    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), **kwargs):
         RespawnCheck.__init__(self, arena_size=arena_size, **kwargs)
         self.distance = distance
     
