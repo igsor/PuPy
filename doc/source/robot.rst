@@ -18,7 +18,7 @@ has to be instantiated through a builder. At creation, the class requires
 an ``actor`` callback (which implements the controller) and some timings.
 The timings define the length of different epochs, namely the intervalls
 at which the ``actor`` is executed and how many sensor readings will be
-available. The callback must be compliant with :py:class:`PuppyActor`. Note
+available. The callback must be compliant with :py:class:`RobotActor`. Note
 that although the interface is specified in a class structure, it is designed
 in a way that also fits a plain function.
 
@@ -32,7 +32,7 @@ return an iterator for the next of motor targets. These are incrementally
 enforced on the motors, such that the ``actor`` may indeed define the robot's
 behaviour. To do so, the sensor readings between two calls are supplied.
 To see how this works exactly, consult the documentation of
-:py:class:`WebotsPuppyMixin` and :py:class:`PuppyActor`.
+:py:class:`WebotsPuppyMixin` and :py:class:`RobotActor`.
 
 The :py:class:`WebotsPuppyMixin` abstracts from the Webots API in the sense
 that it takes care of initialization and readout of Puppy's sensors. Thus,
@@ -59,7 +59,7 @@ this just specifies a way of moving around.
 >>>     'phase'     : (0.0, 0.0, 0.5, 0.5)
 >>> })
 
-With this specification, an :py:class:`actor <PuppyActor>` can be set up.
+With this specification, an :py:class:`actor <RobotActor>` can be set up.
 Again, it's not important what the actor concretely does but its mere
 existence: It implements the act-step in the sense-think-act cycle. Again,
 for details see :doc:`control`.

@@ -16,7 +16,7 @@ gait_params = {
 gait = PuPy.Gait(gait_params)
 
 # Multidimensional collector
-class MyCollector(PuPy.PuppyCollector):
+class MyCollector(PuPy.RobotCollector):
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
         if len(epoch) > 0:
             epoch['random'] = np.random.normal(size=(100,10))

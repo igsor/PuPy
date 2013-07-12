@@ -42,7 +42,7 @@ class Gait(object):
     def __str__(self):
         return self.name
 
-class PuppyActor(object):
+class RobotActor(object):
     """Template class for an actor, used in :py:class:`WebotsPuppyMixin`.
     
     The actor is called after every control period, when a new sequence
@@ -93,6 +93,10 @@ class PuppyActor(object):
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         raise NotImplementedError()
 
+class PuppyActor(RobotActor):
+    """Deprecated alias for :py:class:`RobotActor`."""
+    pass
+
 class RandomGaitControl(PuppyActor):
     """From a list of available gaits, randomly select one."""
     def __init__(self, gaits):
@@ -127,7 +131,7 @@ class SequentialGaitControl(PuppyActor):
         gait = self.gait_iter.next()
         return gait.iter(time_start_ms, step_size)
 
-class _PuppyCollector_h5py(PuppyActor):
+class _PuppyCollector_h5py(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the h5py module.
     
@@ -139,7 +143,7 @@ class _PuppyCollector_h5py(PuppyActor):
     ``actor``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``actor``
-        is required. It must match the :py:class:`PuppyActor` interface.
+        is required. It must match the :py:class:`RobotActor` interface.
     
     ``expfile``
         Path to the file into which the experimental data should be
@@ -203,7 +207,7 @@ class _PuppyCollector_h5py(PuppyActor):
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
 
-class _PuppyCollector_pytables(PuppyActor):
+class _PuppyCollector_pytables(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the PyTables module.
     
@@ -215,7 +219,7 @@ class _PuppyCollector_pytables(PuppyActor):
     ``actor``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``actor``
-        is required. It must match the :py:class:`PuppyActor` interface.
+        is required. It must match the :py:class:`RobotActor` interface.
     
     ``expfile``
         Path to the file into which the experimental data should be
@@ -270,7 +274,7 @@ class _PuppyCollector_pytables(PuppyActor):
         self.fh.flush()
         return self.actor(epoch, time_start_ms, time_end_ms, step_size)
 
-class PuppyCollector(_PuppyCollector_h5py):
+class RobotCollector(_PuppyCollector_h5py):
     """Collect sensor readouts and store them in a file.
     
     The data is stored in the [HDF5]_ format. For each simulation run,
@@ -286,7 +290,7 @@ class PuppyCollector(_PuppyCollector_h5py):
     ``actor``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``actor``
-        is required. It must match the :py:class:`PuppyActor` interface.
+        is required. It must match the :py:class:`RobotActor` interface.
     
     ``expfile``
         Path to the file into which the experimental data should be
@@ -296,4 +300,8 @@ class PuppyCollector(_PuppyCollector_h5py):
         Additional headers, stored with the current experiment.
         A *dict* is expected. Default is None (no headers).
     """
+    pass
+
+class PuppyCollector(RobotCollector):
+    """Deprecated alias for :py:class:`RobotCollector`."""
     pass

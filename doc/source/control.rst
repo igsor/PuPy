@@ -12,7 +12,7 @@ Introduction
 Given the :py:class:`supervisor <WebotsSupervisorMixin>` and
 :py:class:`robot <WebotsPuppyMixin>`, a working controller can be set up.
 As described on the :doc:`robot` page, this is achieved by
-implementing an ``actor``, compliant with the :py:class:`PuppyActor`
+implementing an ``actor``, compliant with the :py:class:`RobotActor`
 interface. Again, note that the interface is desined such that it may
 be matched by either a class or a function.
 
@@ -35,7 +35,7 @@ choices. Or it might be desired to switch the gait during the
 experiment. Some actors have been prepared for this purpose, their
 reference and explanation can be found below.
 
-One actor that deserves special attention is :py:class:`PuppyCollector`.
+One actor that deserves special attention is :py:class:`RobotCollector`.
 It is a transparent actor, meaning that it delegates the action decision
 to another one but only stores the sensory data in a file (also see the
 `Example`_).
@@ -81,11 +81,11 @@ respective controller is initialized with the two gaits:
 
 >>> actor = PuPy.RandomGaitControl([boundLeft, boundRight])
 
-This now is an actor, as it implements the :py:class:`PuppyActor`
+This now is an actor, as it implements the :py:class:`RobotActor`
 interface - of course, :py:class:`RandomGaitControl` is designed to do
 so. Yet, it might also be interesting to store sensor readouts of the
 simulation in a file for later inspection. For this purpose, there exists
-the :py:class:`PuppyCollector`. It is a transparent actor, meaning that
+the :py:class:`RobotCollector`. It is a transparent actor, meaning that
 it simulates an actor towards the :py:class:`WebotsPuppyMixin` but lets
 a 'true' actor do the work. It just stores the provided measurements in
 a file.
@@ -94,7 +94,7 @@ This transparency can also be observed in the initialization, when the
 previously defined actor is passed as argument, together with a target
 file.
 
->>> observer = PuPy.PuppyCollector(actor, expfile='/tmp/puppy_sim.hdf5')
+>>> observer = PuPy.RobotCollector(actor, expfile='/tmp/puppy_sim.hdf5')
 
 When the actor is initialized, it is passed to the constructor of
 :py:class:`WebotsPuppyMixin` through the :py:func:`robot builder <robotBuilder>`.
@@ -129,8 +129,11 @@ between the two gaits defined. The figure below gives an example of this.
 Reference
 ---------
 
-.. autoclass:: PuppyActor
+.. autoclass:: RobotActor
     :members:
+
+.. autoclass:: PuppyActor
+    :show-inheritance:
 
 .. autoclass:: Gait
     :members:
@@ -147,5 +150,8 @@ Reference
     :members:
     :show-inheritance:
 
-.. autoclass:: PuppyCollector
+.. autoclass:: RobotCollector
     :members:
+
+.. autoclass:: PuppyCollector
+    :show-inheritance:

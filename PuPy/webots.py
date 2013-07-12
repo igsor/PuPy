@@ -14,25 +14,30 @@ import sys
 # todo: supervisor revert name (string)
 # todo: action name might be interesting (e.g. when observing gaits)
 
-class WebotsPuppyMixin(object):
-    """Webots Puppy controller. It samples all sensors and periodically
+class WebotsRobotMixin(object):
+    """Webots Robot controller. It samples all sensors and periodically
     consults an ``actor`` for control decisions.
     
     ``actor``
         A function which determines the motor targets for the next
-        control period. See *PuppyActor* for specifics.
+        control period. See *RobotActor* for specifics.
         
         The function must return an interator which is valid for at
         least *ctrl_period_ms* / *motor_period_ms* steps. In each step,
         it must return a list of four motor targets.
         
-        The actor's interface is defined by :py:class:`PuppyActor`. Note
+        The actor's interface is defined by :py:class:`RobotActor`. Note
         however, that the interface is organized such that the class
         structure may be obsolete.
         
     ``sampling_period_ms``
         The period according to which sensors are sampled.
         In milliseconds.
+    
+    ``ctrl_period_ms``
+        The period of control actions. In milliseconds.
+        Must be a larger than or equal to the motor period and, if
+        larger, a multiple thereof.
     
     ``motor_period_ms``
         The period according to which motor targets are set. In
@@ -41,10 +46,10 @@ class WebotsPuppyMixin(object):
         sampling period, otherwise the observations per control decision
         may become funny.
     
-    ``ctrl_period_ms``
-        The period of control actions. In milliseconds.
-        Must be a larger than or equal to the motor period and, if
-        larger, a multiple thereof.
+    ``event_period_ms``
+        The period in milliseconds that is used for polling the
+        receiver. Should optimally be a multiple of the control or
+        sampling period or the Supervisor's sampling period.
     
     ``noise_ctrl``
         Additive zero-mean gaussian noise on the motor targets.
@@ -61,19 +66,8 @@ class WebotsPuppyMixin(object):
         approach, the dict keys have to correspond to the sensor name.
         Use None to discard the noise (default).
     
-    ``event_period_ms``
-        The period in milliseconds that is used for polling the
-        receiver. Should optimally be a multiple of the control or
-        sampling period or the Supervisor's sampling period.
-    
-    ``event_handler``
-        Register a callback that is executed whenever a new message
-        arrives at the receiver. The handler is executed for every
-        message individually (even if there are several). It must only
-        take one argument, the message.
-    
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, noise_ctrl=None, noise_obs=None, event_period_ms=20, event_handler=None):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None):
         # action
         self.actor = actor
         
@@ -82,7 +76,10 @@ class WebotsPuppyMixin(object):
         self.ctrl_period = ctrl_period_ms
         if motor_period_ms is None:
             motor_period_ms = sampling_period_ms
+        if event_period_ms is None:
+            event_period_ms = sampling_period_ms
         self.motor_period = motor_period_ms
+        self.event_period = event_period_ms
         
         # check assumptions on periods
         assert self.ctrl_period >= self.motor_period
@@ -94,69 +91,17 @@ class WebotsPuppyMixin(object):
             if self.sampling_period % self.motor_period != 0:
                 warnings.warn('The sampling period is not a multiple of the motor period')
         
-        # init motors
-        self.motors = [self.getServo(s) for s in self._s_hip]
-        
         # init noise
         self.motor_noise = noise_ctrl
         self.observer_noise = noise_obs
         
-        # init sensors
-        self.getAccelerometer(self._s_accel).enable(self.sampling_period)
-        self.getGyro(self._s_gyro).enable(self.sampling_period)
-        self.getCompass(self._s_compass).enable(self.sampling_period)
-        self.getGPS(self._s_gps).enable(self.sampling_period)
-        for servo in self._s_hip + self._s_knee:
-            self.getServo(servo).enablePosition(self.sampling_period)
-        for touch in self._s_touch:
-            self.getTouchSensor(touch).enable(self.sampling_period)
+        # init sensors and motors
+        self._motors = {}
+        self._sensors_1d = {}
+        self._sensors_3d = {}
         
-        # init sensor readout function
-        self.readout = self.__readout_gen()
-        
-        # init supervisor receiver
-        self.receiver = self.getReceiver('fromSupervisorReceiver')
-        self.event_period = event_period_ms
-        self.event_handler = event_handler
-        self.receiver.enable(self.event_period)
-    
-    # Sensor names
-    _s_accel = 'accelerometer'
-    _s_gyro = 'gyro'
-    _s_compass = 'compass'
-    _s_gps = 'puppyGPS'
-    
-    _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
-    _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
-    _s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
-    _s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
-    
-    def __readout_gen(self):
-        """Produce a sensor readout generator."""
-        single_dim, three_dim = [], []
-        for servo in self._s_hip + self._s_knee:
-            single_dim.append(self.getServo(servo).getPosition)
-        
-        for touch in self._s_touch:
-            single_dim.append(self.getTouchSensor(touch).getValue)
-        
-        three_dim.append(self.getAccelerometer(self._s_accel).getValues)
-        three_dim.append(self.getGyro(self._s_gyro).getValues)
-        three_dim.append(self.getCompass(self._s_compass).getValues)
-        three_dim.append(self.getGPS(self._s_gps).getValues)
-        
-        while True:
-            singles = map(lambda f:f(), single_dim)
-            three = map(lambda (x, z, y):[x, y, z], map(lambda f:f(), three_dim))
-            yield singles + reduce(operator.add, three)
-    
-    def readout_labels(self):
-        """Return a list of sensor labels where the order is the same
-        as in the sensor readouts."""
-        f = lambda lbl: reduce(operator.add, map(lambda i:(i+'_x', i+'_y', i+'_z'), lbl))
-        return \
-            self._s_target + self._s_hip + self._s_knee + self._s_touch + \
-            f((self._s_accel, self._s_gyro, self._s_compass, self._s_gps))
+        # init events
+        self._events = []
     
     def run(self):
         """Main controller loop. Runs infinitely unless aborted by
@@ -187,44 +132,53 @@ class WebotsPuppyMixin(object):
             behaviour.
         
         """
+        # init sensor readouts
+        sensor_labels, read_sensors = self.get_readout()
+        sensor_labels = self._motors.keys() + sensor_labels # FIXME: Cannot guarantee any order on self._motor.keys()
+        
+        # init time
         sys.stdout.flush()
         current_time = 0
         # gcd is associative and commutative
         loop_wait = gcd(self.motor_period, self.sampling_period)
         loop_wait = gcd(self.event_period, loop_wait)
         epoch = Queue.deque(maxlen=self.ctrl_period/self.sampling_period)
+        
         # first epoch targets
         motor_targets = self.actor(dict(), current_time, current_time + self.ctrl_period, self.motor_period)
         
         # initial target
         current_target = motor_targets.next()
-        for servo, trg in zip(self.motors, current_target):
-            servo.setPosition(trg)
+        self._set_targets(current_target)
         
         # main loop
         while True:
             # advance
             if self.step(loop_wait) == -1:
-                break # otherwise 1st sensor read-outs are nan
+                break
+            
             current_time += loop_wait
             
             # first serve receiver callback
-            if current_time % self.event_period == 0 and self.event_handler is not None:
+            if current_time % self.event_period == 0:
                 # check messages in receiver
-                while self.receiver.getQueueLength() > 0:
-                    self.event_handler(self.receiver.getData())
-                    self.receiver.nextPacket()
+                for rcv, handler in self._events:
+                    if handler is None:
+                        continue
+                    if rcv.getQueueLength() > 0:
+                        handler(rcv.getData())
+                        rcv.nextPacket()
             
             # sense
             # update observations
             if current_time % self.sampling_period == 0:
-                sensors_current = self.readout.next()
+                sensors_current = read_sensors.next()
                 epoch.append( current_target + sensors_current )
             
             # think
             # next action
             if current_time % self.ctrl_period == 0:
-                sensor_epoch = dict(zip(self.readout_labels(), map(np.array, zip(*epoch))))
+                sensor_epoch = dict(zip(sensor_labels, map(np.array, zip(*epoch))))
                 if self.observer_noise is not None:
                     self._add_observer_noise(sensor_epoch)
                 
@@ -237,9 +191,7 @@ class WebotsPuppyMixin(object):
                 current_target = motor_targets.next()
                 if self.motor_noise is not None:
                     current_target = self._add_motor_noise(current_target)
-                
-                for servo, trg in zip(self.motors, current_target):
-                    servo.setPosition(trg)
+                self._set_targets(current_target)
         
         # teardown
         self._post_run_hook(current_time)
@@ -265,15 +217,16 @@ class WebotsPuppyMixin(object):
     def _add_observer_noise(self, epoch):
         """Add observer noise, according to *observer_noise*.
         """
+        motor_names = self._motors.keys()
         if isinstance(self.observer_noise, dict):
             # dict case, individual noise per sensor
             for k in self.observer_noise: # len(obs_noise) <= len(epoch)
-                if k in epoch and k not in ('trg0', 'trg1', 'trg2', 'trg3'):
+                if k in epoch and k not in motor_names:
                     epoch[k] += np.random.normal(scale=self.observer_noise[k], size=epoch[k].shape)
                 else:
                     # scalar case, same noise for all sensors
                     for k in epoch:
-                        if k in ('trg0', 'trg1', 'trg2', 'trg3'):
+                        if k in motor_names:
                             continue
                         epoch[k] += np.random.normal(scale=self.observer_noise, size=epoch[k].shape)
         return epoch
@@ -283,12 +236,129 @@ class WebotsPuppyMixin(object):
         """
         if isinstance(self.motor_noise, int) or isinstance(self.motor_noise, float):
             # scalar case, same noise for all motors
-            noise = np.random.normal(scale=self.motor_noise, size=(4,))
+            noise = np.random.normal(scale=self.motor_noise, size=(len(self._motors),))
         else:
             # list case, individual noise per motor
             noise = [np.random.normal(scale=sig) for sig in self.motor_noise]
         current_target = map(operator.add, current_target, noise)
         return current_target
+    
+    def _set_targets(self, current_target):
+        """Abstract function for setting the actuator targets.
+        """
+        # FIXME: No semantics over motors
+        raise NotImplementedError()
+    
+    def add_receiver(self, receiver_name, event_handler):
+        """Add a ``receiver`` for polling. If a new message is available
+        ``event_handler`` is to be called.
+        """
+        receiver = self.getReceiver(receiver_name)
+        receiver.enable(self.event_period)
+        self._events.append((receiver, event_handler))
+        return self
+    
+    def add_sensor(self, name, clbk, dim=1):
+        """Add a sensor ``name`` to the robot. The function ``clbk``
+        reads out sensor value(s). Each readout must either produce
+        one (``dim`` = 1) or three (``dim`` = 3) readout values.
+        """
+        if dim == 1:
+            self._sensors_1d[name] = clbk
+        elif dim == 3:
+            self._sensors_3d[name] = clbk
+        else:
+            raise NotImplementedError()
+        
+        return self
+    
+    def add_motor(self, name, clbk):
+        """Add a motor ``name`` to the robot. The function ``clbk`` is
+        currently not used.
+        """
+        self._motors[name] = clbk # FIXME: Callback not used... 
+        return self
+    
+    def get_readout(self):
+        """Return labels and a generator for reading out sensor values.
+        The labels and values returned by the generator have the same
+        order.
+        """
+        gen = self._readout_gen()
+        lbl = self._readout_labels()
+        return lbl, gen
+    
+    def _readout_gen(self):
+        """Produce a sensor readout generator."""
+        sensors_1d = self._sensors_1d.values()
+        sensors_3d = self._sensors_3d.values()
+        while True:
+            single = map(lambda f: f(), sensors_1d)
+            three = map(lambda (x, z, y):[x, y, z], map(lambda f:f(), sensors_3d))
+            yield single + reduce(operator.add, three)
+    
+    def _readout_labels(self):
+        """Return a list of sensor labels where the order is the same
+        as in the sensor readouts."""
+        single = self._sensors_1d.keys()
+        three = reduce(operator.add, map(lambda i: [i+'_x', i+'_y', i+'_z'], self._sensors_3d.keys()))
+        return single + three
+
+class WebotsPuppyMixin(WebotsRobotMixin):
+    """The actual Puppy Robot implementation.
+    """
+    def __init__(self, *args, **kwargs):
+        super(WebotsPuppyMixin, self).__init__(*args, **kwargs)
+        
+        # Sensor names
+        _s_accel = 'accelerometer'
+        _s_gyro = 'gyro'
+        _s_compass = 'compass'
+        _s_gps = 'puppyGPS'
+        
+        _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
+        _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
+        _s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
+        _s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
+        
+        # sensor vars
+        acc = self.getAccelerometer(_s_accel)
+        gyr = self.getGyro(_s_gyro)
+        mgn = self.getCompass(_s_compass)
+        gps = self.getGPS(_s_gps)
+        servos = [self.getServo(s) for s in _s_hip + _s_knee]
+        touch = [self.getTouchSensor(t) for t in _s_touch]
+        
+        # enable sensors
+        acc.enable(self.sampling_period)
+        gyr.enable(self.sampling_period)
+        mgn.enable(self.sampling_period)
+        gps.enable(self.sampling_period)
+        for sensor in servos:
+            sensor.enablePosition(self.sampling_period)
+        for sensor in touch:
+            sensor.enable(self.sampling_period)
+        
+        # register sensors
+        self.add_sensor(_s_accel, acc.getValues, dim=3)
+        self.add_sensor(_s_gyro, gyr.getValues, dim=3)
+        self.add_sensor(_s_compass, mgn.getValues, dim=3)
+        self.add_sensor(_s_gps, gps.getValues, dim=3)
+        for name, sensor in zip(_s_hip + _s_knee, servos):
+            self.add_sensor(name, sensor.getPosition)
+        for name, sensor in zip(_s_touch, touch):
+            self.add_sensor(name, sensor.getValue)
+        
+        # register motors
+        for name, motor in zip(_s_target, servos[:4]):
+            self.add_motor(name, motor)
+    
+    def _set_targets(self, current_target):
+        """Set the targets."""
+        # FIXME: No semantics over motors
+        names = ('trg0', 'trg1', 'trg2', 'trg3')
+        for name, trg in zip(names, current_target):
+            self._motors[name].setPosition(trg)
 
 class WebotsSupervisorMixin(object):
     """Webots supervisor 'controller'. It actively probes the simulation,

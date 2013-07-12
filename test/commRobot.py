@@ -24,4 +24,8 @@ actor = PuPy.ConstantGaitControl(gait)
 
 
 # robot
-PuPy.robotBuilder(Robot, actor, event_period_ms=50, event_handler=recv).run()
+r = PuPy.robotBuilder(Robot, actor, event_period_ms=50)
+r.add_receiver('fromSupervisorReceiver', recv)
+r.run()
+
+
