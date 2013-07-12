@@ -29,8 +29,8 @@ gait_params = {
 gaits = [PuPy.Gait(gait_params[g], name=g) for g in gait_params]
 
 # actor
-#actor = PuPy.RandomGaitControl(gaits)
-actor = PuPy.ConstantGaitControl(gaits[2])
+actor = PuPy.RandomGaitControl(gaits)
+#actor = PuPy.ConstantGaitControl(gaits[2])
 observer = PuPy.RobotCollector(actor, expfile='/tmp/puppy_sim.hdf5')
 
 # robot

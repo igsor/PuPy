@@ -96,7 +96,7 @@ class WebotsRobotMixin(object):
         self.observer_noise = noise_obs
         
         # init sensors and motors
-        self._motors = {}
+        self._motors = []
         self._sensors_1d = {}
         self._sensors_3d = {}
         
@@ -134,7 +134,7 @@ class WebotsRobotMixin(object):
         """
         # init sensor readouts
         sensor_labels, read_sensors = self.get_readout()
-        sensor_labels = self._motors.keys() + sensor_labels # FIXME: Cannot guarantee any order on self._motor.keys()
+        sensor_labels = self.motor_names() + sensor_labels
         
         # init time
         sys.stdout.flush()
@@ -197,6 +197,10 @@ class WebotsRobotMixin(object):
         self._post_run_hook(current_time)
         return self
     
+    def motor_names(self):
+        """Return the motor's names."""
+        return map(lambda (name, dev): name, self._motors)
+    
     def _post_run_hook(self, current_time_ms):
         """Cleanup after the main loop has terminated.
         
@@ -217,7 +221,7 @@ class WebotsRobotMixin(object):
     def _add_observer_noise(self, epoch):
         """Add observer noise, according to *observer_noise*.
         """
-        motor_names = self._motors.keys()
+        motor_names = self.motor_names()
         if isinstance(self.observer_noise, dict):
             # dict case, individual noise per sensor
             for k in self.observer_noise: # len(obs_noise) <= len(epoch)
@@ -246,7 +250,6 @@ class WebotsRobotMixin(object):
     def _set_targets(self, current_target):
         """Abstract function for setting the actuator targets.
         """
-        # FIXME: No semantics over motors
         raise NotImplementedError()
     
     def add_receiver(self, receiver_name, event_handler):
@@ -272,11 +275,11 @@ class WebotsRobotMixin(object):
         
         return self
     
-    def add_motor(self, name, clbk):
-        """Add a motor ``name`` to the robot. The function ``clbk`` is
-        currently not used.
+    def add_motor(self, name, device):
+        """Add a motor ``name`` to the robot with the corresponding
+        webots node ``device``.
         """
-        self._motors[name] = clbk # FIXME: Callback not used... 
+        self._motors.append((name, device))
         return self
     
     def get_readout(self):
@@ -355,10 +358,8 @@ class WebotsPuppyMixin(WebotsRobotMixin):
     
     def _set_targets(self, current_target):
         """Set the targets."""
-        # FIXME: No semantics over motors
-        names = ('trg0', 'trg1', 'trg2', 'trg3')
-        for name, trg in zip(names, current_target):
-            self._motors[name].setPosition(trg)
+        for trg, (name, motor) in zip(current_target, self._motors):
+            motor.setPosition(trg)
 
 class WebotsSupervisorMixin(object):
     """Webots supervisor 'controller'. It actively probes the simulation,
