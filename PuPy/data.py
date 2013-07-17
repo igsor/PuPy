@@ -8,15 +8,16 @@ import numpy as np
 import pylab as pl
 import h5py
 
-        _s_accel = 'accelerometer'
-        _s_gyro = 'gyro'
-        _s_compass = 'compass'
-        _s_gps = 'puppyGPS'
-        
-        _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
-        _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
-        _s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
-        _s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
+_s_accel = 'accelerometer'
+_s_gyro = 'gyro'
+_s_compass = 'compass'
+_s_gps = 'puppyGPS'
+
+_s_target = ('trg0', 'trg1', 'trg2', 'trg3')
+_s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
+_s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
+_s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
+
 datasets = ['trg0', 'trg1', 'trg2', 'trg3',
             'hip0', 'hip1', 'hip2', 'hip3',
             'knee0', 'knee1', 'knee2', 'knee3',

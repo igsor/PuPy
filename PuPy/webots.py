@@ -655,19 +655,22 @@ class QuitMaxIter(SupervisorCheck):
     def __str__(self):
         return "MaxIter"
 
-def _event_handler_template(robot, epoch, current_time, msg):
-    """Template function for event_handler function of :py:class:WebotsRobotMixin:.
+def event_handler_template(robot, epoch, current_time, msg):
+    """Template function for event_handler function of
+    :py:class:`WebotsRobotMixin:`.
+    
     ``robot``
-        Instance of :py:class:WebotsRobotMixin: with the current robot.
+        Instance of :py:class:`WebotsRobotMixin` with the current robot.
     
     ``epoch``
-        :py:keyword:dict: containing the current sensor readings.
+        :py:keyword:`dict` containing the current sensor readings.
+        
     
     ``current_time``
-        :py:keyword:int: with the current time step in ms.
+        :py:func:`int` with the current time step in ms.
     
     ``msg``
-        :py:keyword:str: containing the event message.
+        :py:func:`str` containing the event message.
     """
     pass
 

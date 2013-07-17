@@ -98,5 +98,5 @@ Reference
 .. autoclass:: WebotsRobotMixin
     :members:
 
-.. autofunction:: _event_handler_template
+.. autofunction:: event_handler_template
 
