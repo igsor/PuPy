@@ -92,7 +92,11 @@ Reference
 ---------
 
 .. autoclass:: WebotsPuppyMixin
-    :members: run
+    :show-inheritance:
+    :members:
+
+.. autoclass:: WebotsRobotMixin
+    :members:
 
 .. autofunction:: _event_handler_template
 
