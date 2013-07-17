@@ -3,6 +3,7 @@
 import random
 from math import sin, pi
 import time
+import numpy as np
 
 class Gait(object):
     """Motor target generator, using predefined gait_switcher.
@@ -167,7 +168,7 @@ class _PuppyCollector_h5py(RobotActor):
         name = str(len(self.fh.keys()))
         self.grp = self.fh.create_group(name)
         amngr = h5py.AttributeManager(self.grp)
-        amngr.create('time', time.time())
+        amngr.create('time', time.ctime())
         if headers is not None:
             for k in headers:
                 amngr.create(k, headers[k])
@@ -305,3 +306,69 @@ class RobotCollector(_PuppyCollector_h5py):
 class PuppyCollector(RobotCollector):
     """Deprecated alias for :py:class:`RobotCollector`."""
     pass
+
+
+class GaitParametersCollector(PuppyActor):
+    """A collector that records the motor parameters."""
+    def __init__(self, observer):
+        self.observer = observer
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        if time_start_ms:
+            current_params = self.observer.actor.gait_iter.params
+            epoch['frequency_FL'] = np.array([current_params['frequency'][0]])
+            epoch['frequency_FR'] = np.array([current_params['frequency'][1]])
+            epoch['frequency_HL'] = np.array([current_params['frequency'][2]])
+            epoch['frequency_HR'] = np.array([current_params['frequency'][3]])
+            epoch['offset_FL'] = np.array([current_params['offset'][0]])
+            epoch['offset_FR'] = np.array([current_params['offset'][1]])
+            epoch['offset_HL'] = np.array([current_params['offset'][2]])
+            epoch['offset_HR'] = np.array([current_params['offset'][3]])
+            epoch['amplitude_FL'] = np.array([current_params['amplitude'][0]])
+            epoch['amplitude_FR'] = np.array([current_params['amplitude'][1]])
+            epoch['amplitude_HL'] = np.array([current_params['amplitude'][2]])
+            epoch['amplitude_HR'] = np.array([current_params['amplitude'][3]])
+            epoch['phase_FL'] = np.array([current_params['phase'][0]])
+            epoch['phase_FR'] = np.array([current_params['phase'][1]])
+            epoch['phase_HL'] = np.array([current_params['phase'][2]])
+            epoch['phase_HR'] = np.array([current_params['phase'][3]])
+        return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
+
+
+class TumbleCollector(PuppyActor):
+    """A collector that records when Puppy tumbles."""
+    def __init__(self, observer):
+        self.observer = observer
+        self._tumbled = 0
+        self.event_handler = self._get_event_handler(self)
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        if time_start_ms:
+            epoch['tumble'] = self._tumbled
+            self._tumbled = 0
+        return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _get_event_handler(self):
+        def func(robot, epoch, current_time, msg):
+            if msg=='tumbled':
+                self._tumbled = 1
+        return func
+
+class ResetCollector(PuppyActor):
+    """A collector that records when Puppy was reset (respawned)."""
+    def __init__(self, observer):
+        self.observer = observer
+        self._reset = 0
+        self.event_handler = self._get_event_handler(self)
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        if time_start_ms:
+            epoch['reset'] = self._tumbled
+            self._tumbled = 0
+        return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _get_tumble_handler(self):
+        def func(robot, epoch, current_time, msg):
+            if msg=='reset':
+                self._reset = 1
+        return func

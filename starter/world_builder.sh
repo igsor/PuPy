@@ -15,6 +15,7 @@ OPTIONS:
    -p      Puppy
    -f      Overwrite target
    -b      Directory of your webots data
+   -m      starting mode of webots: stop, realtime (default), run or fast
    -h      Show this message
 EOF
 }
@@ -30,7 +31,8 @@ WORLD="default"
 PUPPY="default"
 SUPERVISOR="default"
 FORCE=
-while getopts “hfp:s:t:c:b:” OPTION
+MODE="realtime"
+while getopts “hfp:s:t:c:b:m:” OPTION
 do
      case $OPTION in
          h)
@@ -54,6 +56,9 @@ do
              ;;
          b)
              BASE=$OPTARG
+             ;;
+         m)
+             MODE=$OPTARG
              ;;
          ?)
              usage
@@ -101,6 +106,13 @@ if [[ ! -e $BASE/terrain/$WORLD ]]; then echo "WORLD not found"; exit 1; fi
 if [[ ! -e $BASE/puppy/$PUPPY ]]; then echo "PUPPY not found"; exit 1; fi
 if [[ ! -e $BASE/supervisor/$SUPERVISOR ]]; then echo "SUPERVISOR not found"; exit 1; fi
 
+# check mode argument
+if [[ ! $MODE == "stop" ]] && [[ ! $MODE == "realtime" ]] && [[ ! $MODE == "run" ]] && [[ ! $MODE == "fast" ]]
+then
+    echo "The webots run mode is $MODE, but must be one of (stop, realtime, run, fast)."
+    exit 1
+fi
+
 # create data structure
 mkdir -p $TRG
 cp -R $BASE/supplementary/* $TRG
@@ -114,16 +126,20 @@ cat $BASE/supervisor/$SUPERVISOR | sed 's/controller ".*"/controller "supervisor
 # copy controller
 mkdir -p $TRG/controllers/puppyController
 mkdir -p $TRG/controllers/supervisorController
-PPTH=`readlink -f $PCTRL`
-SPTH=`readlink -f $SCTRL`
-#cat $BASE/controllers/generic/generic.py | sed "s:^CMD='':CMD='$PPTH':" > $TRG/controllers/puppyController/puppyController.py
-#cat $BASE/controllers/generic/generic.py | sed "s:^CMD='':CMD='$SPTH':" > $TRG/controllers/supervisorController/supervisorController.py
-rm $TRG/controllers/puppyController/puppyController.py 2>/dev/null
-rm $TRG/controllers/supervisorController/supervisorController.py 2>/dev/null
-ln -s $PPTH $TRG/controllers/puppyController/puppyController.py
-ln -s $SPTH $TRG/controllers/supervisorController/supervisorController.py
+PPTH=( $PCTRL ) # make array
+SPTH=( $SCTRL )
+PPTH[0]=`readlink -f "${PPTH[0]}"` # replace controller file by absolute path
+SPTH[0]=`readlink -f "${SPTH[0]}"`
+PPTH="${PPTH[@]}" # rejoin array elements to single string
+SPTH="${SPTH[@]}"
+cat $BASE/controllers/generic/generic.py | sed "s|^CMD=''|CMD='$PPTH'|" > $TRG/controllers/puppyController/puppyController.py
+cat $BASE/controllers/generic/generic.py | sed "s|^CMD=''|CMD='$SPTH'|" > $TRG/controllers/supervisorController/supervisorController.py
+#rm $TRG/controllers/puppyController/puppyController.py 2>/dev/null
+#rm $TRG/controllers/supervisorController/supervisorController.py 2>/dev/null
+#ln -s $PPTH $TRG/controllers/puppyController/puppyController.py
+#ln -s $SPTH $TRG/controllers/supervisorController/supervisorController.py
 
 
 # start webots
 cd $TRG
-$WEBOTS worlds/puppy_world.wbt
+$WEBOTS "--mode="$MODE worlds/puppy_world.wbt

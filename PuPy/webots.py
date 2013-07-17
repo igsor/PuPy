@@ -67,7 +67,7 @@ class WebotsRobotMixin(object):
         Use None to discard the noise (default).
     
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None, event_handlers=[]):
         # action
         self.actor = actor
         
@@ -101,7 +101,7 @@ class WebotsRobotMixin(object):
         self._sensors_3d = {}
         
         # init events
-        self._events = []
+        self._event_handlers = event_handlers
     
     def run(self):
         """Main controller loop. Runs infinitely unless aborted by
@@ -162,12 +162,10 @@ class WebotsRobotMixin(object):
             # first serve receiver callback
             if current_time % self.event_period == 0:
                 # check messages in receiver
-                for rcv, handler in self._events:
-                    if handler is None:
-                        continue
-                    if rcv.getQueueLength() > 0:
-                        handler(rcv.getData())
-                        rcv.nextPacket()
+                if self._receiver.getQueueLength() > 0:
+                    for handler in self._event_handlers:
+                        handler(self, epoch, current_time, self._receiver.getData())
+                    self._receiver.nextPacket()
             
             # sense
             # update observations
@@ -252,13 +250,12 @@ class WebotsRobotMixin(object):
         """
         raise NotImplementedError()
     
-    def add_receiver(self, receiver_name, event_handler):
+    def add_receiver(self, receiver_name):
         """Add a ``receiver`` for polling. If a new message is available
         ``event_handler`` is to be called.
         """
-        receiver = self.getReceiver(receiver_name)
-        receiver.enable(self.event_period)
-        self._events.append((receiver, event_handler))
+        self._receiver = self.getReceiver(receiver_name)
+        self._receiver.enable(self.event_period)
         return self
     
     def add_sensor(self, name, clbk, dim=1):
@@ -355,6 +352,9 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         # register motors
         for name, motor in zip(_s_target, servos[:4]):
             self.add_motor(name, motor)
+        
+        # register receiver
+        self.add_receiver('fromSupervisorReceiver')
     
     def _set_targets(self, current_target):
         """Set the targets."""
@@ -591,8 +591,8 @@ class RespawnTumbled(RespawnCheck):
         respawned. In milliseconds
     
     """
-    def __init__(self, grace_time_ms=2000, **kwargs):
-        RespawnCheck.__init__(self, **kwargs)
+    def __init__(self, grace_time_ms=2000, *args, **kwargs):
+        RespawnCheck.__init__(self, *args, **kwargs)
         self.grace_time = grace_time_ms
         self._queue = Queue.deque(maxlen=5)
     
@@ -622,8 +622,8 @@ class RespawnOutOfArena(RespawnCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), **kwargs):
-        RespawnCheck.__init__(self, arena_size=arena_size, **kwargs)
+    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), *args, **kwargs):
+        RespawnCheck.__init__(self, arena_size=arena_size, *args, **kwargs)
         self.distance = distance
     
     def __call__(self, supervisor):
@@ -654,6 +654,22 @@ class QuitMaxIter(SupervisorCheck):
     
     def __str__(self):
         return "MaxIter"
+
+def _event_handler_template(robot, epoch, current_time, msg):
+    """Template function for event_handler function of :py:class:WebotsRobotMixin:.
+    ``robot``
+        Instance of :py:class:WebotsRobotMixin: with the current robot.
+    
+    ``epoch``
+        :py:keyword:dict: containing the current sensor readings.
+    
+    ``current_time``
+        :py:keyword:int: with the current time step in ms.
+    
+    ``msg``
+        :py:keyword:str: containing the event message.
+    """
+    pass
 
 def mixin(cls_mixin, cls_base):
     """Create a class which derives from two base classes.

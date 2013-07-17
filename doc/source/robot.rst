@@ -94,3 +94,5 @@ Reference
 .. autoclass:: WebotsPuppyMixin
     :members: run
 
+.. autofunction:: _event_handler_template
+
