@@ -30,17 +30,13 @@ SCTRL=
 WORLD="default"
 PUPPY="default"
 SUPERVISOR="default"
-FORCE=
-MODE="realtime"
-while getopts “hfp:s:t:c:b:m:” OPTION
+MODE="stop"
+while getopts “hp:s:t:c:b:m:” OPTION
 do
      case $OPTION in
          h)
              usage
              exit 1
-             ;;
-         f)
-             FORCE=1
              ;;
          p)
              PUPPY=$OPTARG
@@ -78,11 +74,8 @@ fi
 TRG=$@
 
 if [[ -e $TRG ]]; then
-    if [[ -z $FORCE ]]; then
-        echo "Target exists. Use -f to overwrite"
-    else
-        rm -R $TRG
-    fi
+    echo "WARNING: Target exists. Overwriting"
+    rm -R $TRG
 fi
 
 # check input files
