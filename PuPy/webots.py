@@ -67,7 +67,7 @@ class WebotsRobotMixin(object):
         Use None to discard the noise (default).
     
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None, event_handlers=[]):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None):
         # action
         self.actor = actor
         
@@ -101,7 +101,7 @@ class WebotsRobotMixin(object):
         self._sensors_3d = {}
         
         # init events
-        self._event_handlers = event_handlers
+        self._events = {}
     
     def run(self):
         """Main controller loop. Runs infinitely unless aborted by
@@ -162,10 +162,12 @@ class WebotsRobotMixin(object):
             # first serve receiver callback
             if current_time % self.event_period == 0:
                 # check messages in receiver
-                if self._receiver.getQueueLength() > 0:
-                    for handler in self._event_handlers:
-                        handler(self, epoch, current_time, self._receiver.getData())
-                    self._receiver.nextPacket()
+                for receiver in self._events:
+                    while receiver.getQueueLength() > 0:
+                        msg = receiver.getData()
+                        for handler in self._events[receiver]:
+                            handler(self, epoch, current_time, msg)
+                        receiver.nextPacket()
             
             # sense
             # update observations
@@ -250,12 +252,24 @@ class WebotsRobotMixin(object):
         """
         raise NotImplementedError()
     
-    def add_receiver(self, receiver_name):
-        """Add a ``receiver`` for polling. If a new message is available
-        ``event_handler`` is to be called.
+    def add_receiver(self, receiver_name, callback=None):
+        """Add a ``receiver_name`` for polling. If a new message is
+        available ``callback`` is to be called. If ``callback`` is a
+        list, all its items will be called on the same message.
         """
-        self._receiver = self.getReceiver(receiver_name)
-        self._receiver.enable(self.event_period)
+        receiver = self.getReceiver(receiver_name)
+        receiver.enable(self.event_period)
+        
+        if receiver not in self._events:
+            self._events[receiver] = []
+        
+        if callback is not None:
+            if callable(callback):
+                self._events[receiver].append(callback)
+            else:
+                # Assuming list type
+                self._events[receiver].extend(list(callback))
+        
         return self
     
     def add_sensor(self, name, clbk, dim=1):
@@ -306,8 +320,15 @@ class WebotsRobotMixin(object):
 
 class WebotsPuppyMixin(WebotsRobotMixin):
     """The actual Puppy Robot implementation.
+    
+    ``event_handlers``
+        List of receiver callbacks. Only allowed as keyword argument.
+        The callbacks must implement the
+        :py:func:`event_handler_template` interface.
+    
     """
     def __init__(self, *args, **kwargs):
+        event_handlers = kwargs.pop('event_handlers', [])
         super(WebotsPuppyMixin, self).__init__(*args, **kwargs)
         
         # Sensor names
@@ -354,7 +375,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
             self.add_motor(name, motor)
         
         # register receiver
-        self.add_receiver('fromSupervisorReceiver')
+        self.add_receiver('fromSupervisorReceiver', event_handlers)
     
     def _set_targets(self, current_target):
         """Set the targets."""

@@ -142,4 +142,4 @@ cat $BASE/controllers/generic/generic.py | sed "s|^CMD=''|CMD='$SPTH'|" > $TRG/c
 
 # start webots
 cd $TRG
-$WEBOTS "--mode="$MODE worlds/puppy_world.wbt
+$WEBOTS --mode=$MODE worlds/puppy_world.wbt
