@@ -8,16 +8,6 @@ import numpy as np
 import pylab as pl
 import h5py
 
-_s_accel = 'accelerometer'
-_s_gyro = 'gyro'
-_s_compass = 'compass'
-_s_gps = 'puppyGPS'
-
-_s_target = ('trg0', 'trg1', 'trg2', 'trg3')
-_s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
-_s_knee = ('knee0', 'knee1', 'knee2', 'knee3')
-_s_touch = ('touch0', 'touch1', 'touch2', 'touch3')
-
 datasets = ['trg0', 'trg1', 'trg2', 'trg3',
             'hip0', 'hip1', 'hip2', 'hip3',
             'knee0', 'knee1', 'knee2', 'knee3',
@@ -26,7 +16,9 @@ datasets = ['trg0', 'trg1', 'trg2', 'trg3',
             'gyro_x', 'gyro_y', 'gyro_z',
             'compass_x', 'compass_y', 'compass_z',
             'puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z',
-            ]
+            'gait', 'tumble', 'reset']
+
+# TODO: do something with the idx lists!!!
 # FL: front left, FR: front right, HL: hind left, HR: hind right
 # X: front-back axis, Y: left-right axis, Y: top-bottom axis
 idx_signals = {'M_FL':0, 'M_FR':1, 'M_HL':2, 'M_HR':3, # Motor target angles in rad
@@ -62,41 +54,150 @@ idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
 names_modalities = ['Motor commands', 'Hip angles', 'Knee angles', 'Touch pressure', 'Acceleration', 'Gyroscope', 'Compass', 'Position']
 units_modalities = ['rad', 'rad', 'rad', 'N', 'm/s^2', 'rad/s', 'north vector', 'm']
 
-class PuppyDataSim():
+class RobotData():
+    '''
+    This class contains the data from Robot experiments including relevant meta information.
+    '''
+    def __init__(self, filename='', experiment=0, fs=50., resampling=1):
+        self.filename = filename
+        self.experiment = experiment
+        self.fs = fs
+        self._resampling = resampling
+        self._x = np.array([])
+        self.shape = (0,)
+        self.nSamples = 0
+        self._loaded = False
+        
+        if self.filename:
+            pass
+#            self.loadData()
+    
+    def loadData(self, experiment=None, datasets=[]):
+        """
+        Load the data from the file into the memory.
+        ``experiment``
+            An :py:keyword:int: specifying which group will be read from the file (which experiment will be loaded).
+        
+        ``datasets``
+            A :py:keyword:list: containing the names of the datasets that will be loaded and form the columns of the data matrix.
+        """
+        if experiment is None:
+            experiment = self.experiment
+        with h5py.File(self.filename, 'r') as fid:
+            if len(datasets)==0:
+                # load all datasets if none is given (TODO: this is unsafe when the group includes a dataset of different length)
+                datasets = fid['/%d'%self.experiment].keys()
+                if len(datasets)==0:
+                    return 1
+            # create data matrix:
+            self._x = np.empty([fid['/%d'%self.experiment][datasets[0]].shape[0], len(datasets)])
+            for i in range(len(datasets)):
+                self._x[:,i] = fid['/%d'%self.experiment][datasets[i]][:]
+            self.shape = self._x.shape
+            self.nSamples = self.shape[0]
+            self.t = np.arange(self.nSamples, dtype=int)
+                
+            # subsample if requested:    
+            self._x = self._x[::self._resampling]
+            self.t = self.t[::self._resampling]
+            self.fs /= self._resampling
+        
+            self._loaded = True
+        
+    
+    def copy(self, idx=None): # TODO: check method
+        '''
+        deep copy of the data object.
+        '''
+        cpy = RobotData(path='',
+                       fs=self.fs,
+                       resampling=self._resampling,
+                       min_chunk_size=self.min_chunk_size, 
+                       remove_tumbling=self._remove_tumbling,
+                       pre_delete_tumble=self._pre_delete_tumble,
+                       post_delete_tumble=self._post_delete_tumble,
+                       remove_reset=self._remove_reset,
+                       pre_delete_reset=self._pre_delete_reset,
+                       post_delete_reset=self._post_delete_reset)
+        # copy data:
+        cpy.filename = self.filename
+        if idx is None:
+            cpy._x = self._x.copy()
+            cpy.i_chunk = self.i_chunk.copy()
+        else:
+            if isinstance(idx, int):
+                idx = np.arange(idx)
+            cpy._x = self._x[idx]
+            cpy.t = self.t[idx]
+            # this works only if idx is monotonically increasing with step size 1!
+            cpy.i_chunk = np.unique(np.hstack([idx[:1], self.i_chunk[np.bitwise_and(self.i_chunk>=idx[0],self.i_chunk<=idx[-1])]]))-idx[0]
+#            cpy.i_chunk = np.concatenate([[0], self.i_chunk[1:][np.bitwise_and(self.i_chunk[1:]>=idx[0], self.i_chunk[1:]<idx[-1])]-idx[0]])                
+        cpy.nSamples = cpy._x.shape[0]
+        cpy.nChunks = len(cpy.i_chunk)
+        cpy.shape = cpy._x.shape
+        return cpy
+        
+        
+    
+    def __getitem__(self, idx):
+        return self._x.__getitem__(idx) # like this it is compatible with array representation of the data
+    
+    def __setitem__(self, idx, val):
+        self._x.__setitem__(idx, val) # like this it is compatible with array representation of the data
+    
+    def __iter__(self):
+        self._current_iter = -1
+        return self
+    
+    def next(self):
+        self._current_iter += 1
+        if self._current_iter >= self.nSamples:
+            raise StopIteration
+        else:
+            return self._x[self._current_iter]
+    
+    # TODO: check methods:
+    def __str__(self):
+        return "<RobotData from folder '%s' with %d samples and %d chunks>" % (self.filename, self.nSamples, self.nChunks)
+    
+    def __repr__(self):
+        return "RobotData(filename='%s',fs=%.f,resampling=%d,min_chunk_size=%d," % \
+                             (self.filename, self.fs, self._resampling, self.min_chunk_size) + \
+                             "remove_tumbling=%r,pre_delete_tumble=%d,post_delete_tumble=%d," % \
+                             (self._remove_tumbling, self._pre_delete_tumble, self._post_delete_tumble) + \
+                             "remove_reset=%r,pre_delete_reset=%d,post_delete_reset=%d)" % \
+                              (self._remove_reset, self._pre_delete_reset, self._post_delete_reset)
+        
+
+class PuppyData(RobotData):
     '''
     This class contains the data from Puppy experiments including relevant meta information.
     '''
-
-    def __init__(self, path='', fs=50., resampling=1, min_chunk_size=1000, 
+    
+    def __init__(self, *args, **kwargs):
+        '''
+        Load data from filename and clean it from artifacts as desired.
+        '''
+        super(PuppyData, self).__init__(*args, **kwargs)
+        
+    
+    # TODO: check method:
+    def cleanData(self, min_chunk_size=1000,
                   remove_tumbling=True, pre_delete_tumble=20, post_delete_tumble=20,
                   remove_reset=True, pre_delete_reset=0, post_delete_reset=20):
-        '''
-        Load data from path and clean it from artifacts as desired.
-        '''
-        # copy parameters:
-        self.fs = fs
-        self.path = path
+        
+        if not self._loaded():
+            self.loadData()
+        
         self.min_chunk_size = min_chunk_size
-        self._resampling = resampling
         self._remove_tumbling = remove_tumbling
         self._remove_reset = remove_reset
         self._pre_delete_tumble = pre_delete_tumble
         self._post_delete_tumble = post_delete_tumble
         self._pre_delete_reset = pre_delete_reset
         self._post_delete_reset = post_delete_reset
-        self._x = np.array([])
         self.i_chunk = np.array([])
-        self.shape = (0,)
-        
-        if path:
-            self.loadData()
-    
-    def loadData(self):
-        # load the data:
-        self._x = read_sim_self_3_with_gait_index(self.path)
-        self._x = np.concatenate([d for d in self._x], axis=0)
-        self.nSamples = self[:].shape[0]
-        self.t = np.arange(self.nSamples, dtype=int)
+        self.nChunks = 0
         
         # find tumbles and resets:
         idx_keep = np.ones(self.nSamples, dtype=bool)
@@ -116,12 +217,6 @@ class PuppyDataSim():
             for start, end in zip(i_start,i_end):
                 if end-start<=self.min_chunk_size:
                     idx_keep[start:end] = False
-                
-        # subsample:    
-        self._x = self._x[::self._resampling]
-        self.t = self.t[::self._resampling]
-        idx_keep = idx_keep[::self._resampling]
-        self.fs /= self._resampling
         
         # find chunks:
         self.i_chunk = np.zeros(self.nSamples, dtype=bool)
@@ -136,62 +231,6 @@ class PuppyDataSim():
         self.nChunks = len(self.i_chunk)
         self.nSamples = idx_keep.sum()
         self.shape = (self.nSamples,len(idx_motor+idx_sensor))
-    
-    def copy(self, idx=None):
-        '''
-        deep copy of the data object.
-        '''
-        cpy = PuppyDataSim(path='',
-                           fs=self.fs,
-                           resampling=self._resampling,
-                           min_chunk_size=self.min_chunk_size, 
-                           remove_tumbling=self._remove_tumbling,
-                           pre_delete_tumble=self._pre_delete_tumble,
-                           post_delete_tumble=self._post_delete_tumble,
-                           remove_reset=self._remove_reset,
-                           pre_delete_reset=self._pre_delete_reset,
-                           post_delete_reset=self._post_delete_reset)
-        # copy data:
-        cpy.path = self.path
-        if idx is None:
-            cpy._x = self._x.copy()
-            cpy.i_chunk = self.i_chunk.copy()
-        else:
-            if isinstance(idx, int):
-                idx = np.arange(idx)
-            cpy._x = self._x[idx]
-            cpy.t = self.t[idx]
-            # this works only if idx is monotonically increasing with step size 1!
-            cpy.i_chunk = np.unique(np.hstack([idx[:1], self.i_chunk[np.bitwise_and(self.i_chunk>=idx[0],self.i_chunk<=idx[-1])]]))-idx[0]
-#            cpy.i_chunk = np.concatenate([[0], self.i_chunk[1:][np.bitwise_and(self.i_chunk[1:]>=idx[0], self.i_chunk[1:]<idx[-1])]-idx[0]])                
-        cpy.nSamples = cpy._x.shape[0]
-        cpy.nChunks = len(cpy.i_chunk)
-        cpy.shape = cpy._x.shape
-        return cpy
-    
-    def __getitem__(self, idx):
-        return self._x[idx] # like this it is compatible with array representation of the data
-    
-    def __setitem__(self, idx, val):
-        self._x[idx] = val # like this it is compatible with array representation of the data
-    
-    def __iter__(self):
-        self._current_iter = -1
-        return self
-    
-    def next(self):
-        self._current_iter += 1
-        if self._current_iter >= self.nSamples:
-            raise StopIteration
-        else:
-            return self._x[self._current_iter]
-    
-    # !depricated: dat.x[idx] is much slower than dat[idx]
-    def _get_x(self):
-        return self._x[:,idx_motor+idx_sensor]
-    def _set_x(self, value):
-        self._x[:,idx_motor+idx_sensor] = value
-    x = property(_get_x, _set_x, doc="sensorimotor data of the robot")
     
     def _get_gait(self):
         return self._x[:,idx_gait]
@@ -223,20 +262,10 @@ class PuppyDataSim():
         self._x[:,idx_reset] = value
     reset = property(_get_reset, _set_reset, doc="has a 1.0 where Puppy was reset to a new position and 0.0 elsewhere")
     
-    def __str__(self):
-        return "<PuppyDataSim from folder '%s' with %d samples and %d chunks>" % (self.path, self.nSamples, self.nChunks)
-    
-    def __repr__(self):
-        return "PuppyDataSim(path='%s',fs=%.f,resampling=%d,min_chunk_size=%d," % \
-                             (self.path, self.fs, self._resampling, self.min_chunk_size) + \
-                             "remove_tumbling=%r,pre_delete_tumble=%d,post_delete_tumble=%d," % \
-                             (self._remove_tumbling, self._pre_delete_tumble, self._post_delete_tumble) + \
-                             "remove_reset=%r,pre_delete_reset=%d,post_delete_reset=%d)" % \
-                              (self._remove_reset, self._pre_delete_reset, self._post_delete_reset)
-    
     
 
 
+# TODO: include methods into PuppyData?:
 def remove_artifacts(i_artifact, data=None, pre_remove=0, post_remove=0):
     '''
     look into index data and find indices to keep. 
