@@ -8,71 +8,25 @@ import numpy as np
 import pylab as pl
 import h5py
 
-datasets = ['trg0', 'trg1', 'trg2', 'trg3',
-            'hip0', 'hip1', 'hip2', 'hip3',
-            'knee0', 'knee1', 'knee2', 'knee3',
-            'touch0', 'touch1', 'touch2', 'touch3',
-            'accelerometer_x', 'accelerometer_y', 'accelerometer_z',
-            'gyro_x', 'gyro_y', 'gyro_z',
-            'compass_x', 'compass_y', 'compass_z',
-            'puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z',
-            'gait', 'tumble', 'reset']
 
-# TODO: do something with the idx lists!!!
-# FL: front left, FR: front right, HL: hind left, HR: hind right
-# X: front-back axis, Y: left-right axis, Y: top-bottom axis
-idx_signals = {'M_FL':0, 'M_FR':1, 'M_HL':2, 'M_HR':3, # Motor target angles in rad
-               'H_FL':4, 'H_FR':5, 'H_HL':6, 'H_HR':7, # hip joint angles in rad
-               'K_FL':8, 'K_FR':9, 'K_HL':10, 'K_HR':11, # knee joint angles in rad
-               'T_FL':12, 'T_FR':13, 'T_HL':14, 'T_HR':15, # Touch sensors at the feet some pressure unit
-               'A_X':16, 'A_Y':17, 'A_Z':18, # acceleration sensors in m/s
-               'G_X':19, 'G_Y':20, 'G_Z':21, # gyroscope (maybe in rad/s?)
-               'M_X':22, 'M_Y':23, 'M_Z':24, # magnetometer
-               'GPS_X':25, 'GPS_Y':26, 'GPS_Z':27, # Global Positioning Sensor in world coordinated
-               'ground':28, # index of the current terrain Puppy's center of mass is at (numbering defined in individual experiment)
-               'reset':29,
-               'tumble':30, # 1 where tumbling is detected, 0 otherwise
-               'gait':31} # 1 where Puppy was respawned at a new location, 0 otherwise
-
-idx_motor = [idx_signals[k] for k in ['M_FL', 'M_FR', 'M_HL', 'M_HR']]
-idx_sensor = [idx_signals[k] for k in ['H_FL', 'H_FR', 'H_HL', 'H_HR',
-                                       'K_FL', 'K_FR', 'K_HL', 'K_HR',
-                                       'T_FL', 'T_FR', 'T_HL', 'T_HR',
-                                       'A_X', 'A_Y', 'A_Z',
-                                       'G_X', 'G_Y', 'G_Z',
-                                       'M_X', 'M_Y', 'M_Z',
-                                       'GPS_X', 'GPS_Y', 'GPS_Z']]
-idx_gps = [idx_signals[k] for k in ['GPS_X', 'GPS_Y', 'GPS_Z',]]
-idx_terrain = idx_signals['ground']
-idx_reset = idx_signals['reset']
-idx_tumble = idx_signals['tumble']
-idx_gait = idx_signals['gait']
-
-idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
-                  [16,17,18], [19,20,21], [22,23,24], [25,26,27]]
-
-names_modalities = ['Motor commands', 'Hip angles', 'Knee angles', 'Touch pressure', 'Acceleration', 'Gyroscope', 'Compass', 'Position']
-units_modalities = ['rad', 'rad', 'rad', 'N', 'm/s^2', 'rad/s', 'north vector', 'm']
-
-class RobotData():
+class RobotData(object):
     '''
     This class contains the data from Robot experiments including relevant meta information.
     '''
-    def __init__(self, filename='', experiment=0, fs=50., resampling=1):
+    def __init__(self, filename='', experiment=0, datasets=[], fs=50., resampling=1):
         self.filename = filename
         self.experiment = experiment
+        self.datasets = datasets
         self.fs = fs
         self._resampling = resampling
         self._x = np.array([])
-        self.shape = (0,)
-        self.nSamples = 0
+        self.t = np.array([])
         self._loaded = False
         
         if self.filename:
-            pass
-#            self.loadData()
+            self.loadData()
     
-    def loadData(self, experiment=None, datasets=[]):
+    def loadData(self, experiment=None, datasets=None):
         """
         Load the data from the file into the memory.
         ``experiment``
@@ -81,20 +35,28 @@ class RobotData():
         ``datasets``
             A :py:keyword:list: containing the names of the datasets that will be loaded and form the columns of the data matrix.
         """
-        if experiment is None:
-            experiment = self.experiment
+        # override experiment and datasets if desired:
+        if experiment is not None:
+            self.experiment = experiment
+        if datasets is None:
+            datasets = self.datasets
+        
+        # open file and load data:
         with h5py.File(self.filename, 'r') as fid:
-            if len(datasets)==0:
-                # load all datasets if none is given (TODO: this is unsafe when the group includes a dataset of different length)
-                datasets = fid['/%d'%self.experiment].keys()
-                if len(datasets)==0:
-                    return 1
+            if len(datasets)==0: # load all datasets if none is given
+                # TODO: this is unsafe when the experiment includes datasets of different length
+                datasets = sorted(fid['/%d'%self.experiment].keys(), key=unicode.lower)
+            
             # create data matrix:
-            self._x = np.empty([fid['/%d'%self.experiment][datasets[0]].shape[0], len(datasets)])
-            for i in range(len(datasets)):
-                self._x[:,i] = fid['/%d'%self.experiment][datasets[i]][:]
-            self.shape = self._x.shape
-            self.nSamples = self.shape[0]
+            self.datasets = []
+            self._x = np.empty([0, fid['/%d'%self.experiment].values()[0].shape[0]])
+            for d in datasets:
+                if d in fid['/%d'%self.experiment].keys():
+                    self._x = np.vstack([self._x, fid['/%d'%self.experiment][d]])
+                    self.datasets.append(d)
+                else:
+                    print "dataset %s not in file. skipping..." % d
+            self._x = self._x.T
             self.t = np.arange(self.nSamples, dtype=int)
                 
             # subsample if requested:    
@@ -105,39 +67,28 @@ class RobotData():
             self._loaded = True
         
     
-    def copy(self, idx=None): # TODO: check method
+    def copy(self, idx=None):
         '''
         deep copy of the data object.
         '''
-        cpy = RobotData(path='',
-                       fs=self.fs,
-                       resampling=self._resampling,
-                       min_chunk_size=self.min_chunk_size, 
-                       remove_tumbling=self._remove_tumbling,
-                       pre_delete_tumble=self._pre_delete_tumble,
-                       post_delete_tumble=self._post_delete_tumble,
-                       remove_reset=self._remove_reset,
-                       pre_delete_reset=self._pre_delete_reset,
-                       post_delete_reset=self._post_delete_reset)
-        # copy data:
-        cpy.filename = self.filename
+        # create RobotData instance:
+        cpy = RobotData(filename='',
+                        experiment=self.experiment,
+                        datasets=self.datasets,
+                        fs=self.fs,
+                        resampling=self._resampling)
+        # copy data and fields:
         if idx is None:
             cpy._x = self._x.copy()
-            cpy.i_chunk = self.i_chunk.copy()
+            cpy.t = self.t.copy()  
         else:
             if isinstance(idx, int):
                 idx = np.arange(idx)
             cpy._x = self._x[idx]
             cpy.t = self.t[idx]
-            # this works only if idx is monotonically increasing with step size 1!
-            cpy.i_chunk = np.unique(np.hstack([idx[:1], self.i_chunk[np.bitwise_and(self.i_chunk>=idx[0],self.i_chunk<=idx[-1])]]))-idx[0]
-#            cpy.i_chunk = np.concatenate([[0], self.i_chunk[1:][np.bitwise_and(self.i_chunk[1:]>=idx[0], self.i_chunk[1:]<idx[-1])]-idx[0]])                
-        cpy.nSamples = cpy._x.shape[0]
-        cpy.nChunks = len(cpy.i_chunk)
-        cpy.shape = cpy._x.shape
+        cpy.filename = self.filename
+        cpy._loaded = self._loaded
         return cpy
-        
-        
     
     def __getitem__(self, idx):
         return self._x.__getitem__(idx) # like this it is compatible with array representation of the data
@@ -156,18 +107,31 @@ class RobotData():
         else:
             return self._x[self._current_iter]
     
-    # TODO: check methods:
+    def _shape(self):
+        return self._x.shape
+    shape = property(_shape)
+    
+    def _nSamples(self):
+        return self._x.shape[0]
+    nSamples = property(_nSamples)
+    
+    def _get_idx_signals(self):
+        idx_signals = {}
+        for i,d in enumerate(self.datasets):
+            idx_signals[d] = i
+        return idx_signals
+    def _set_idx_signals(self, idx_signals):
+        self.datasets = []
+        for i in range(max(idx_signals.values())):
+            self.datasets.append(filter(lambda x:idx_signals[x]==i, idx_signals)[0])
+    idx_signals = property(_get_idx_signals, _set_idx_signals, doc="dict containing the indexes to the datasets")
+    
     def __str__(self):
-        return "<RobotData from folder '%s' with %d samples and %d chunks>" % (self.filename, self.nSamples, self.nChunks)
+        return "<%s from file '%s'>" % (str(self.__class__).split('.')[-1][:-2], self.filename)
     
     def __repr__(self):
-        return "RobotData(filename='%s',fs=%.f,resampling=%d,min_chunk_size=%d," % \
-                             (self.filename, self.fs, self._resampling, self.min_chunk_size) + \
-                             "remove_tumbling=%r,pre_delete_tumble=%d,post_delete_tumble=%d," % \
-                             (self._remove_tumbling, self._pre_delete_tumble, self._post_delete_tumble) + \
-                             "remove_reset=%r,pre_delete_reset=%d,post_delete_reset=%d)" % \
-                              (self._remove_reset, self._pre_delete_reset, self._post_delete_reset)
-        
+        return "%s(filename='%s',experiment=%d,datasets=%s,fs=%.f,resampling=%d)" % \
+            (str(self.__class__).split('.')[-1][:-2], self.filename, self.experiment, str(self.datasets), self.fs, self._resampling)        
 
 class PuppyData(RobotData):
     '''
@@ -179,14 +143,59 @@ class PuppyData(RobotData):
         Load data from filename and clean it from artifacts as desired.
         '''
         super(PuppyData, self).__init__(*args, **kwargs)
+        self._remove_tumbling = False
+        self._remove_reset = False
+        self.min_chunk_size = 1
+        self._pre_delete_tumble = 0
+        self._post_delete_tumble = 0
+        self._pre_delete_reset = 0
+        self._post_delete_reset = 0
+        self.i_chunk = np.array([0])
+        self.nChunks = 1
         
-    
+        # TODO: find a way to load default PuppyData's index map (in case no datasets-field is given) without loading the data twice! 
+        # default signals:
+        # FL: front left, FR: front right, HL: hind left, HR: hind right
+        # X: front-back axis, Y: left-right axis, Y: top-bottom axis
+        idx_signals = {'trg0':0, 'trg1':1, 'trg2':2, 'trg3':3, # Motor target angles in rad
+                       'hip0':4, 'hip1':5, 'hip2':6, 'hip3':7, # hip joint angles in rad
+                       'knee0':8, 'knee1':9, 'knee2':10, 'knee3':11, # knee joint angles in rad
+                       'touch0':12, 'touch1':13, 'touch2':14, 'touch3':15, # Touch sensors at the feet some pressure unit
+                       'accelerometer_x':16, 'accelerometer_y':17, 'accelerometer_z':18, # acceleration sensors in m/s
+                       'gyro_x':19, 'gyro_y':20, 'gyro_z':21, # gyroscope (maybe in rad/s?)
+                       'compass_x':22, 'compass_y':23, 'compass_z':24, # magnetometer
+                       'puppyGPS_x':25, 'puppyGPS_y':26, 'puppyGPS_z':27, # Global Positioning Sensor in world coordinated
+                       'gait':28, # index of the current gait 
+                       'ground':29, # index of the current terrain Puppy's center of mass is at (numbering defined in individual experiment)
+                       'reset':30, # 1 where Puppy was respawned at a new location, 0 otherwise
+                       'tumble':31} # 1 where Puppy fell over, 0 otherwise
+        
+#        idx_motor = [idx_signals[k] for k in ['M_FL', 'M_FR', 'M_HL', 'M_HR']]
+#        idx_sensor = [idx_signals[k] for k in ['H_FL', 'H_FR', 'H_HL', 'H_HR',
+#                                               'K_FL', 'K_FR', 'K_HL', 'K_HR',
+#                                               'T_FL', 'T_FR', 'T_HL', 'T_HR',
+#                                               'A_X', 'A_Y', 'A_Z',
+#                                               'G_X', 'G_Y', 'G_Z',
+#                                               'M_X', 'M_Y', 'M_Z',
+#                                               'GPS_X', 'GPS_Y', 'GPS_Z']]
+#        idx_gps = [idx_signals[k] for k in ['GPS_X', 'GPS_Y', 'GPS_Z',]]
+#        idx_terrain = idx_signals['ground']
+#        idx_reset = idx_signals['reset']
+#        idx_tumble = idx_signals['tumble']
+#        idx_gait = idx_signals['gait']
+#        
+#        idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
+#                          [16,17,18], [19,20,21], [22,23,24], [25,26,27]]
+#        
+#        names_modalities = ['Motor commands', 'Hip angles', 'Knee angles', 'Touch pressure', 'Acceleration', 'Gyroscope', 'Compass', 'Position']
+#        units_modalities = ['rad', 'rad', 'rad', 'N', 'm/s^2', 'rad/s', 'north vector', 'm']
+        
     # TODO: check method:
     def cleanData(self, min_chunk_size=1000,
                   remove_tumbling=True, pre_delete_tumble=20, post_delete_tumble=20,
                   remove_reset=True, pre_delete_reset=0, post_delete_reset=20):
         
-        if not self._loaded():
+        if not self._loaded:
             self.loadData()
         
         self.min_chunk_size = min_chunk_size
@@ -196,8 +205,8 @@ class PuppyData(RobotData):
         self._post_delete_tumble = post_delete_tumble
         self._pre_delete_reset = pre_delete_reset
         self._post_delete_reset = post_delete_reset
-        self.i_chunk = np.array([])
-        self.nChunks = 0
+        self.i_chunk = np.array([0])
+        self.nChunks = 1
         
         # find tumbles and resets:
         idx_keep = np.ones(self.nSamples, dtype=bool)
@@ -229,43 +238,62 @@ class PuppyData(RobotData):
         self.i_chunk = self.i_chunk[idx_keep]
         self.i_chunk = pl.find(self.i_chunk)
         self.nChunks = len(self.i_chunk)
-        self.nSamples = idx_keep.sum()
-        self.shape = (self.nSamples,len(idx_motor+idx_sensor))
     
+    
+    def copy(self, idx=None):
+        cpy = super(PuppyData, self).copy(idx)
+        
+        if idx is None:
+            cpy.i_chunk = self.i_chunk.copy()
+        else:
+            if isinstance(idx, int):
+                idx = np.arange(idx)
+            # this works only if idx is monotonically increasing with step size 1!
+            cpy.i_chunk = np.unique(np.hstack([idx[:1], self.i_chunk[np.bitwise_and(self.i_chunk>=idx[0],self.i_chunk<=idx[-1])]]))-idx[0]
+        cpy.nChunks = len(cpy.i_chunk)
+        cpy._remove_tumbling = self._remove_tumbling
+        cpy._remove_reset = self._remove_reset
+        cpy.min_chunk_size = self.min_chunk_size
+        cpy._pre_delete_tumble = self._pre_delete_tumble
+        cpy._post_delete_tumble = self._post_delete_tumble
+        cpy._pre_delete_reset = self._pre_delete_reset0
+        cpy._post_delete_reset = self._post_delete_reset0
+        return cpy
+    
+    # TODO check index lists (self.idx_gait etc...)
     def _get_gait(self):
-        return self._x[:,idx_gait]
+        return self._x[:,self.idx_gait]
     def _set_gait(self, value):
-        self._x[:,idx_gait] = value
+        self._x[:,self.idx_gait] = value
     gait = property(_get_gait, _set_gait, doc="Gait number as indicated by the 'index' field of the used gait")
     
     def _get_ground(self):
-        return self._x[:,idx_terrain]
+        return self._x[:,self.idx_terrain]
     def _set_ground(self, value):
-        self._x[:,idx_terrain] = value
+        self._x[:,self.idx_terrain] = value
     ground = property(_get_ground, _set_ground, doc="Ground number as indicated by the terrain info file (zero by default)")
     
     def _get_gps(self):
-        return self._x[:,idx_gps]
+        return self._x[:,self.idx_gps]
     def _set_gps(self, value):
-        self._x[:,idx_gps] = value
+        self._x[:,self.idx_gps] = value
     gps = property(_get_gps, _set_gps, doc="Current position of the robot from global positioning sensor (_x,y,z)")
     
     def _get_tumble(self):
-        return self._x[:,idx_tumble]
+        return self._x[:,self.idx_tumble]
     def _set_tumble(self, value):
-        self._x[:,idx_tumble] = value
+        self._x[:,self.idx_tumble] = value
     tumble = property(_get_tumble, _set_tumble, doc="has a 1.0 where Puppy tumbled and 0.0 elsewhere")
     
     def _get_reset(self):
-        return self._x[:,idx_reset]
+        return self._x[:,self.idx_reset]
     def _set_reset(self, value):
-        self._x[:,idx_reset] = value
+        self._x[:,self.idx_reset] = value
     reset = property(_get_reset, _set_reset, doc="has a 1.0 where Puppy was reset to a new position and 0.0 elsewhere")
     
     
 
 
-# TODO: include methods into PuppyData?:
 def remove_artifacts(i_artifact, data=None, pre_remove=0, post_remove=0):
     '''
     look into index data and find indices to keep. 
@@ -280,69 +308,3 @@ def remove_artifacts(i_artifact, data=None, pre_remove=0, post_remove=0):
         return idx_keep
     else:
         return data[idx_keep]
-
-
-
-def cleanData(idx_tumble, idx_reset, pre_delete_tumble=20, post_delete_tumble=20, pre_delete_reset=0, post_delete_reset=20, min_chunk_size=1000, plot=False):
-    '''
-    remove regions where Puppy tumbled and where it was restarted (burn-in).
-    remove also too short regions.
-    '''
-    idx_keep_t = remove_artifacts(idx_tumble, None, pre_delete_tumble, post_delete_tumble)
-    idx_keep_r = remove_artifacts(idx_reset, None, pre_delete_reset, post_delete_reset)
-    idx_keep = np.bitwise_and(idx_keep_t, idx_keep_r)
-    on = pl.find(np.diff(idx_keep.astype(int))>0)+1
-    off = pl.find(np.diff(idx_keep.astype(int))<0)+1
-    if on[0]>off[0]:
-        on = np.concatenate([[0], on])
-    if on[-1]>off[-1]:
-        off = np.concatenate([off, [len(idx_tumble)]])
-    
-    for start, end in zip(on,off):
-        if end-start<=min_chunk_size:
-            #print start,end
-            idx_keep[start:end] = False
-    
-    if plot: # plot must be the acceleration data in order to work
-        idx_keep1 = np.bitwise_and(idx_keep_t, idx_keep_r)
-        accZ = plot
-        accZ_smoothed = np.convolve(accZ, np.ones(50)/50., 'same')
-        t = np.arange(1,accZ.shape[0]+1)# / 50.
-        pl.plot(t, accZ, 'b')
-        pl.plot(t, accZ_smoothed, 'g')
-        pl.plot([t[1],t[-1]], [accZ.mean(), accZ.mean()], '-k')
-        pl.plot([t[1],t[-1]], [accZ.mean()-accZ.std(), accZ.mean()-accZ.std()], '--k')
-        pl.plot([t[1],t[-1]], [accZ.mean()+accZ.std(), accZ.mean()+accZ.std()], '--k')
-        pl.plot(t[idx_keep], np.ones(idx_keep.sum())*(-7.), '*g')
-        pl.plot(t[idx_keep1], np.ones(idx_keep1.sum())*(-5.), '*y')
-        pl.plot(t[idx_tumble==1.], np.ones(idx_tumble.sum())*(-9.), '*r')
-        pl.plot(t[idx_reset==1.], np.ones(idx_reset.sum())*(-10.), '*r')
-        pl.plot(t[on], np.ones(on.shape[0])*(-11.), 'db')
-        pl.plot(t[off-1], np.ones(off.shape[0])*(-11.2), 'sb')
-#        idx_gps = [25,26]
-#        pl.plot(t, dat[:,idx_gps], '-.g')
-    
-    return idx_keep
-
-
-def loadData(path, resampling=1, min_chunk_size=1000, gait_list=None):
-    dat = read_sim_self_3_with_gait_index(path, gait_list) # are the resets correct when using gait_list and it breaks the time series???
-    dat = np.concatenate([d for d in dat], axis=0)
-    
-    # find tumbling and reset regions:
-    idx_keep = cleanData(dat[:,idx_tumble], dat[:,idx_reset], min_chunk_size=min_chunk_size*resampling)
-    
-    # subsample:    
-    dat = dat[::resampling]
-    idx_keep = idx_keep[::resampling]
-    
-    # find chunks:
-    i_on = np.zeros(dat.shape[0], dtype=bool)
-    i_on[pl.find(np.diff(idx_keep.astype(int))>0)+1] = True
-    i_on[0] = idx_keep[0]
-    
-    # remove tumbling and reset regions:
-    dat = dat[idx_keep]
-    i_on = i_on[idx_keep]
-    
-    return dat, i_on
