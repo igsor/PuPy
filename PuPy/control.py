@@ -40,6 +40,9 @@ class Gait(object):
             current_time_ms += step
             yield [A * sin(2.0 * pi * (freq * current_time_ms / 1e3 - phase)) + offset for A, freq, phase, offset in params]
     
+    def copy(self):
+        return Gait(self.params.copy(), self.name)
+    
     def __str__(self):
         return self.name
 
