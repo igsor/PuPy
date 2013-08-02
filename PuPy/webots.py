@@ -622,6 +622,8 @@ class RespawnTumbled(RespawnCheck):
             self._queue.append(supervisor.num_iter)
             if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
                 
+                supervisor.emitter.send('tumbled_grace_start')
+                
                 # let grace period pass
                 supervisor.step(self.grace_time)
                 
