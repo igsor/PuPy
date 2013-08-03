@@ -8,6 +8,7 @@ import Queue
 import warnings
 import numpy as np
 import sys
+import os
 
 # todo: doctest
 # todo: observer callback? other callbacks?
@@ -66,8 +67,13 @@ class WebotsRobotMixin(object):
         approach, the dict keys have to correspond to the sensor name.
         Use None to discard the noise (default).
     
+    ``nrm_file``
+        Path to a file that contains normalization parameters for the
+        sensors. Must be encoded in [JSON]_. See
+        :py:meth:`load_normalization` for the file structure.
+    
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None, nrm_file=None):
         # action
         self.actor = actor
         
@@ -90,6 +96,14 @@ class WebotsRobotMixin(object):
         elif self.motor_period < self.sampling_period:
             if self.sampling_period % self.motor_period != 0:
                 warnings.warn('The sampling period is not a multiple of the motor period')
+        
+        # init normalization
+        self._sensor_mapping = {}
+        if nrm_file is not None:
+            if os.path.exists(nrm_file):
+                self.load_normalization(nrm_file)
+            else:
+                raise Exception('Normalization file does not exist')
         
         # init noise
         self.motor_noise = noise_ctrl
@@ -178,7 +192,15 @@ class WebotsRobotMixin(object):
             # think
             # next action
             if current_time % self.ctrl_period == 0:
-                sensor_epoch = dict(zip(sensor_labels, map(np.array, zip(*epoch))))
+                if len(self._sensor_mapping) > 0:
+                    sensor_epoch = {}
+                    for lbl,sensor in zip(sensor_labels, zip(*epoch)):
+                        sensor = np.array(sensor)
+                        sensor = self.normalize(lbl, sensor)
+                        sensor_epoch[lbl] = sensor
+                else:
+                    sensor_epoch = dict(zip(sensor_labels, map(np.array, zip(*epoch))))
+                
                 if self.observer_noise is not None:
                     self._add_observer_noise(sensor_epoch)
                 
@@ -292,6 +314,59 @@ class WebotsRobotMixin(object):
         """
         self._motors.append((name, device))
         return self
+    
+    def set_normalization(self, sensor, offset, scale):
+        """Set the normalization parameters ``offset`` and ``scale`` for
+        a specific ``sensor``.
+        
+        The normalization computes the following:
+            
+            x' = ( x - ``offset`` ) / ``scale``
+        
+        """
+        self._sensor_mapping[sensor] = (offset, scale)
+    
+    def load_normalization(self, pth):
+        """Load normalization parameters from a *JSON* file at ``pth``.
+        
+        The file structure must be like so:
+        {
+            "<sensor name>" : [<offset>, <scale>],
+        }
+        
+        For example:
+        {
+            "hip0"   : [0.9678, 3.141],
+            "touch0" : [-0.543, 1e3],
+            "trg0"   : [1e-2, 8]
+        }
+        
+        .. note::
+            This routine is only available, if the *json* module is
+            installed.
+        
+        """
+        import json
+        f = open(pth,'r')
+        self._sensor_mapping = json.load(f)
+        f.close()
+    
+    def normalize(self, sensor, value):
+        """Return the normalized ``value``, with respect to ``sensor``."""
+        if sensor not in self._sensor_mapping:
+            return value
+        
+        offset, scale = self._sensor_mapping[sensor]
+        return (value - offset) / scale
+    
+    def denormalize(self, sensor, value):
+        """Return the denormalized ``value``, with respect to
+        ``sensor``."""
+        if sensor not in self._sensor_mapping:
+            return value
+        
+        offset, scale = self._sensor_mapping[sensor]
+        return scale * value + offset
     
     def get_readout(self):
         """Return labels and a generator for reading out sensor values.
