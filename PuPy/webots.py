@@ -67,13 +67,8 @@ class WebotsRobotMixin(object):
         approach, the dict keys have to correspond to the sensor name.
         Use None to discard the noise (default).
     
-    ``nrm_file``
-        Path to a file that contains normalization parameters for the
-        sensors. Must be encoded in [JSON]_. See
-        :py:meth:`load_normalization` for the file structure.
-    
     """
-    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None, nrm_file=None):
+    def __init__(self, actor, sampling_period_ms=20, ctrl_period_ms=2000, motor_period_ms=None, event_period_ms=None, noise_ctrl=None, noise_obs=None):
         # action
         self.actor = actor
         
@@ -97,14 +92,6 @@ class WebotsRobotMixin(object):
             if self.sampling_period % self.motor_period != 0:
                 warnings.warn('The sampling period is not a multiple of the motor period')
         
-        # init normalization
-        self._sensor_mapping = {}
-        if nrm_file is not None:
-            if os.path.exists(nrm_file):
-                self.load_normalization(nrm_file)
-            else:
-                raise Exception('Normalization file does not exist')
-        
         # init noise
         self.motor_noise = noise_ctrl
         self.observer_noise = noise_obs
@@ -116,6 +103,7 @@ class WebotsRobotMixin(object):
         
         # init events
         self._events = {}
+        self._emittors = {}
     
     def run(self):
         """Main controller loop. Runs infinitely unless aborted by
@@ -192,15 +180,7 @@ class WebotsRobotMixin(object):
             # think
             # next action
             if current_time % self.ctrl_period == 0:
-                if len(self._sensor_mapping) > 0:
-                    sensor_epoch = {}
-                    for lbl,sensor in zip(sensor_labels, zip(*epoch)):
-                        sensor = np.array(sensor)
-                        sensor = self.normalize(lbl, sensor)
-                        sensor_epoch[lbl] = sensor
-                else:
-                    sensor_epoch = dict(zip(sensor_labels, map(np.array, zip(*epoch))))
-                
+                sensor_epoch = dict(zip(sensor_labels, map(np.array, zip(*epoch))))
                 if self.observer_noise is not None:
                     self._add_observer_noise(sensor_epoch)
                 
@@ -218,6 +198,23 @@ class WebotsRobotMixin(object):
         # teardown
         self._post_run_hook(current_time)
         return self
+    
+    def send_msg(self, msg, emittor_name=None):
+        """Send a message ``msg`` through a device ``emittor_name``. If
+        the ``emittor_name`` is :py:keyword:`None`, the message will
+        be sent through all available devices."""
+        if emittor_name is None:
+            for emittor in self._emittors.values():
+                emittor.send(msg)
+        else:
+            self._emittors[name].send(msg)
+    
+    def add_emittor(self, name):
+        """Add an emittor called ``name``."""
+        if name in self._emittors:
+            return
+        
+        self._emittors[name] = self.getEmitter(name)
     
     def motor_names(self):
         """Return the motor's names."""
@@ -315,59 +312,6 @@ class WebotsRobotMixin(object):
         self._motors.append((name, device))
         return self
     
-    def set_normalization(self, sensor, offset, scale):
-        """Set the normalization parameters ``offset`` and ``scale`` for
-        a specific ``sensor``.
-        
-        The normalization computes the following:
-            
-            x' = ( x - ``offset`` ) / ``scale``
-        
-        """
-        self._sensor_mapping[sensor] = (offset, scale)
-    
-    def load_normalization(self, pth):
-        """Load normalization parameters from a *JSON* file at ``pth``.
-        
-        The file structure must be like so:
-        {
-            "<sensor name>" : [<offset>, <scale>],
-        }
-        
-        For example:
-        {
-            "hip0"   : [0.9678, 3.141],
-            "touch0" : [-0.543, 1e3],
-            "trg0"   : [1e-2, 8]
-        }
-        
-        .. note::
-            This routine is only available, if the *json* module is
-            installed.
-        
-        """
-        import json
-        f = open(pth,'r')
-        self._sensor_mapping = json.load(f)
-        f.close()
-    
-    def normalize(self, sensor, value):
-        """Return the normalized ``value``, with respect to ``sensor``."""
-        if sensor not in self._sensor_mapping:
-            return value
-        
-        offset, scale = self._sensor_mapping[sensor]
-        return (value - offset) / scale
-    
-    def denormalize(self, sensor, value):
-        """Return the denormalized ``value``, with respect to
-        ``sensor``."""
-        if sensor not in self._sensor_mapping:
-            return value
-        
-        offset, scale = self._sensor_mapping[sensor]
-        return scale * value + offset
-    
     def get_readout(self):
         """Return labels and a generator for reading out sensor values.
         The labels and values returned by the generator have the same
@@ -451,6 +395,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         
         # register receiver
         self.add_receiver('fromSupervisorReceiver', event_handlers)
+        self.add_emittor('toSupervisorEmitter')
     
     def _set_targets(self, current_target):
         """Set the targets."""
@@ -477,6 +422,8 @@ class WebotsSupervisorMixin(object):
         self.checks = checks
         self.loop_wait = sampling_period_ms
         self.emitter = self.getEmitter('toRobotEmitter')
+        self.receiver = self.getReceiver('fromRobotReceiver')
+        self.receiver.enable(self.loop_wait)
         self.num_iter = 0
         
     def run(self):
@@ -679,6 +626,70 @@ class RespawnCheck(SupervisorCheck):
         supervisor.emitter.send('reset')
         print "Respawn robot (%s)" % (str(self))
 
+class ReceiverCheck(SupervisorCheck):
+    def __init__(self, subchecks=None, *args, **kwargs):
+        if subchecks is None:
+            subchecks = []
+        
+        self.checks = {}
+        for check in subchecks:
+            for msg in check.messages():
+                self.checks[msg] = check
+            
+        super(ReceiverCheck, self).__init__(*args, **kwargs)
+    
+    def __call__(self, supervisor):
+        while supervisor.receiver.getQueueLength() > 0:
+            msg = supervisor.receiver.getData()
+            supervisor.receiver.nextPacket()
+            if msg in self.checks:
+                func = self.checks[msg]
+                func(supervisor, msg)
+
+class ReceiverSubcheck(object):
+    def __call__(self, supervisor, msg):
+        raise NotImplementedError()
+    def messages(self):
+        return []
+
+class RespawnOnDemand(RespawnCheck, ReceiverSubcheck):
+    """Respawn if the supervisor receives a *respawn_on_demand* message.
+    Note that since messages are popped from the receiver stack, this
+    check doesn't interoperate with other to-supervisor communication
+    checks (messages will be lost).
+    """
+    def __init__(self, *args, **kwargs):
+        super(RespawnOnDemand, self).__init__(*args, **kwargs)
+    
+    def __call__(self, supervisor, msg):
+        if msg == 'respawn_on_demand':
+            self.respawn(supervisor)
+    
+    def messages(self):
+        return ['respawn_on_demand']
+    
+    def __str__(self):
+        return "OnDemand"
+
+class RevertOnDemand(RevertCheck, ReceiverSubcheck):
+    """Respawn if the supervisor receives a *respawn_on_demand* message.
+    Note that since messages are popped from the receiver stack, this
+    check doesn't interoperate with other to-supervisor communication
+    checks (messages will be lost).
+    """
+    def __init__(self, *args, **kwargs):
+        super(RevertOnDemand, self).__init__(*args, **kwargs)
+    
+    def __call__(self, supervisor, msg):
+        if msg == 'revert_on_demand':
+            self.revert(supervisor)
+    
+    def messages(self):
+        return ['revert_on_demand']
+    
+    def __str__(self):
+        return "RevertOnDemand"
+
 class RespawnTumbled(RespawnCheck):
     """Respawn the robot if it has tumbled.
     
@@ -752,6 +763,23 @@ class QuitMaxIter(SupervisorCheck):
     
     def __str__(self):
         return "MaxIter"
+
+class QuitOnDemand(SupervisorCheck, ReceiverSubcheck):
+    """Stop the simulation webots if a stop message is received.
+    
+    """
+    def __init__(self, *args, **kwargs):
+        super(QuitOnDemand, self).__init__(*args, **kwargs)
+    
+    def __call__(self, supervisor, msg):
+        if msg == 'quit_on_demand':
+            supervisor.simulationQuit(0)
+    
+    def messages(self):
+        return ['quit_on_demand']
+    
+    def __str__(self):
+        return "QuitOnDemand"
 
 def event_handler_template(robot, epoch, current_time, msg):
     """Template function for event_handler function of
