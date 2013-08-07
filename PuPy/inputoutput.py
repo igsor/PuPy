@@ -4,6 +4,8 @@ Code for input/output handling
 
 """
 
+import warnings
+
 def clear_empty_groups(pth):
     """Remove HDF5 groups with no datasets from ``pth``. Return a list
     of removed groups."""
@@ -59,6 +61,25 @@ class Normalization(object):
         """
         self._sensor_mapping[sensor] = (offset, scale)
     
+    def get(self, sensor):
+        """Return the normalization parameters of ``sensor``. A valid
+        result is returned in any case. If the sensor was not
+        configured, the identity mapping is returned, i.e.
+        
+        >>> nrm = Normalization()
+        >>> nrm.set('unknown_sensor', *nrm.get('unknown_sensor'))
+        >>> nrm.normalize_value('unknown_sensor', value) == value
+        True
+        
+        However, a warning will be issued.
+        
+        """
+        if sensor in self._sensor_mapping:
+            return self._sensor_mapping[sensor]
+        else:
+            warnings.warn('Tried to get normalization parameters for an unknown sensor')
+            return (0.0, 1.0)
+    
     def load(self, pth):
         """Load normalization parameters from a *JSON* file at ``pth``.
         
@@ -94,11 +115,11 @@ class Normalization(object):
     def save(self, pth):
         """Store the normalization parameters in a *JSON* file at
         ``pth``.
-        
-        .. todo::
-            Not implemented
         """
-        raise NotImplementedError()
+        import json
+        f = open(pth,'w')
+        json.dump(self._sensor_mapping, f)
+        f.close()
     
     def normalize_epoch(self, epoch):
         """Normalize all values in the :py:keyword:`dict` ``epoch``,
@@ -127,6 +148,7 @@ class Normalization(object):
     def normalize_value(self, sensor, value):
         """Return the normalized ``value``, with respect to ``sensor``."""
         if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to normalize unknown sensor')
             return value
         
         offset, scale = self._sensor_mapping[sensor]
@@ -136,6 +158,7 @@ class Normalization(object):
         """Return the denormalized ``value``, with respect to
         ``sensor``."""
         if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to denormalize unknown sensor')
             return value
         
         offset, scale = self._sensor_mapping[sensor]

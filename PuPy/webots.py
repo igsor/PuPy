@@ -745,6 +745,25 @@ class RespawnOutOfArena(RespawnCheck):
     def __str__(self):
         return "Out-Of-Arena"
 
+class RespawnMaxIter(RespawnCheck):
+    """Respawn the simulation if a maximum duration is exceeded.
+    
+    ``max_duration_ms``
+        Maximum time a simulation may run, in milliseconds. After
+        this limit, the robot respawns.
+    
+    """
+    def __init__(self, max_duration_ms, *args, **kwargs):
+        super(RevertMaxIter, self).__init__(*args, **kwargs)
+        self.max_iter = max_duration_ms
+    
+    def __call__(self, supervisor):
+        if supervisor.num_iter > self.max_iter:
+            self.respawn(supervisor)
+    
+    def __str__(self):
+        return "MaxIter"
+
 class QuitMaxIter(SupervisorCheck):
     """Quit webots if a time limit is exceeded. (in milliseconds!)
     
