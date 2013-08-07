@@ -49,6 +49,7 @@ Contents
     supervisor
     robot
     control
+    utils
     
     examples
     download
