@@ -505,6 +505,62 @@ class SupervisorCheck(object):
         """
         raise NotImplementedError()
 
+class NotifyCheck(SupervisorCheck):
+    """Print a notification if some condition holds.
+    
+    The ``timeout`` controls how often the notification is printed:
+    
+    * ``timeout`` = 0: The message is shown every time the check is run.
+    * ``timeout`` < 0: The message is shown only once. (the default)
+    * ``timeout`` > 0: The message is suppressed for the respective
+                       number of calls.
+    """
+    def __init__(self, timeout=-1):
+        self.timeout = timeout
+        self.notification_counter = 0
+    
+    def __call__(self, supervisor):
+        """Evalute the check, print a message iff some condition holds.
+        No further action is taken.
+        
+        ``supervisor``
+            The supervisor instance
+        
+        """
+        raise NotImplementedError()
+
+    def notify(self, supervisor, message=None):
+        if message is None:
+            message = str(self)
+        
+        if self.notification_counter == 0:
+            if self.timeout < 0:
+                self.notification_counter = -1
+            else:
+                self.notification_counter = self.timeout
+        else:
+            self.notification_counter -= 1
+            return
+        
+        print "Notification:", message
+
+class NotifyTumbled(NotifyCheck):
+    """Notify if Puppy has tumbled."""
+    def __init__(self, *args, **kwargs):
+        super(NotifyTumbled, self).__init__(*args, **kwargs)
+        self._queue = Queue.deque(maxlen=5)
+    
+    def __call__(self, supervisor):
+        """Notify if Puppy has tumbled."""
+        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
+            self._queue.append(supervisor.num_iter)
+            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
+                self.notify(supervisor)
+                self._queue.clear()
+    
+    def __str__(self):
+        return "Tumbled"
+
 class RevertCheck(SupervisorCheck):
     """A template for supervisor's revert checks."""
     def __call__(self, supervisor):

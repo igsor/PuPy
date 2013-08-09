@@ -62,9 +62,10 @@ class Normalization(object):
         self._sensor_mapping[sensor] = (offset, scale)
     
     def get(self, sensor):
-        """Return the normalization parameters of ``sensor``. A valid
-        result is returned in any case. If the sensor was not
-        configured, the identity mapping is returned, i.e.
+        """Return the normalization parameters of ``sensor``. The order
+        is (offset, scale). A valid result is returned in any case.
+        If the sensor was not configured, the identity mapping is
+        returned, i.e.
         
         >>> nrm = Normalization()
         >>> nrm.set('unknown_sensor', *nrm.get('unknown_sensor'))
@@ -77,7 +78,7 @@ class Normalization(object):
         if sensor in self._sensor_mapping:
             return self._sensor_mapping[sensor]
         else:
-            warnings.warn('Tried to get normalization parameters for an unknown sensor')
+            warnings.warn('Tried to get normalization parameters for an unknown sensor (%s)'%sensor)
             return (0.0, 1.0)
     
     def load(self, pth):
@@ -148,7 +149,7 @@ class Normalization(object):
     def normalize_value(self, sensor, value):
         """Return the normalized ``value``, with respect to ``sensor``."""
         if sensor not in self._sensor_mapping:
-            warnings.warn('Tried to normalize unknown sensor')
+            warnings.warn('Tried to normalize unknown sensor (%s)'%sensor)
             return value
         
         offset, scale = self._sensor_mapping[sensor]
@@ -158,7 +159,7 @@ class Normalization(object):
         """Return the denormalized ``value``, with respect to
         ``sensor``."""
         if sensor not in self._sensor_mapping:
-            warnings.warn('Tried to denormalize unknown sensor')
+            warnings.warn('Tried to denormalize unknown sensor (%s)'%sensor)
             return value
         
         offset, scale = self._sensor_mapping[sensor]
