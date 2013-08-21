@@ -340,38 +340,42 @@ class GaitParametersCollector(PuppyActor):
 
 class TumbleCollector(PuppyActor):
     """A collector that records when Puppy tumbles."""
-    def __init__(self, observer):
+    def __init__(self, observer, sampling_period_ms, ctrl_period_ms):
         self.observer = observer
-        self._tumbled = 0
-        self.event_handler = self._get_event_handler(self)
+        self.sampling_period_ms = sampling_period_ms
+        self.ctrl_period_ms = ctrl_period_ms
+        self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+        self.event_handler = self._get_event_handler()
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             epoch['tumble'] = self._tumbled
-            self._tumbled = 0
+            self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
     
     def _get_event_handler(self):
         def func(robot, epoch, current_time, msg):
             if msg=='tumbled':
-                self._tumbled = 1
+                self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
         return func
 
 class ResetCollector(PuppyActor):
     """A collector that records when Puppy was reset (respawned)."""
-    def __init__(self, observer):
+    def __init__(self, observer, sampling_period_ms, ctrl_period_ms):
         self.observer = observer
-        self._reset = 0
-        self.event_handler = self._get_event_handler(self)
+        self.sampling_period_ms = sampling_period_ms
+        self.ctrl_period_ms = ctrl_period_ms
+        self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+        self.event_handler = self._get_event_handler()
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            epoch['reset'] = self._tumbled
-            self._tumbled = 0
+            epoch['reset'] = self._reset
+            self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _get_tumble_handler(self):
+    def _get_event_handler(self):
         def func(robot, epoch, current_time, msg):
             if msg=='reset':
-                self._reset = 1
+                self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
         return func

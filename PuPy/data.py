@@ -13,7 +13,7 @@ class RobotData(object):
     '''
     This class contains the data from Robot experiments including relevant meta information.
     '''
-    def __init__(self, filename='', experiment=0, datasets=[], fs=50., resampling=1):
+    def __init__(self, filename='', experiment=0, datasets=[], fs=50., resampling=1, load_data=True):
         self.filename = filename
         self.experiment = experiment
         self.datasets = datasets
@@ -23,7 +23,7 @@ class RobotData(object):
         self.t = np.array([])
         self._loaded = False
         
-        if self.filename:
+        if self.filename and load_data:
             self.loadData()
     
     def loadData(self, experiment=None, datasets=None):
@@ -137,6 +137,44 @@ class PuppyData(RobotData):
     '''
     This class contains the data from Puppy experiments including relevant meta information.
     '''
+     
+    # default signals:
+    # FL: front left, FR: front right, HL: hind left, HR: hind right
+    # X: front-back axis, Y: left-right axis, Y: top-bottom axis
+    idx_signals = {'trg0':0, 'trg1':1, 'trg2':2, 'trg3':3, # Motor target angles in rad
+                   'hip0':4, 'hip1':5, 'hip2':6, 'hip3':7, # hip joint angles in rad
+                   'knee0':8, 'knee1':9, 'knee2':10, 'knee3':11, # knee joint angles in rad
+                   'touch0':12, 'touch1':13, 'touch2':14, 'touch3':15, # Touch sensors at the feet some pressure unit
+                   'accelerometer_x':16, 'accelerometer_y':17, 'accelerometer_z':18, # acceleration sensors in m/s
+                   'gyro_x':19, 'gyro_y':20, 'gyro_z':21, # gyroscope (maybe in rad/s?)
+                   'compass_x':22, 'compass_y':23, 'compass_z':24, # magnetometer
+                   'puppyGPS_x':25, 'puppyGPS_y':26, 'puppyGPS_z':27} # Global Positioning Sensor in world coordinated
+#                   'gait':28, # index of the current gait 
+#                   'ground':29, # index of the current terrain Puppy's center of mass is at (numbering defined in individual experiment)
+#                   'reset':30, # 1 where Puppy was respawned at a new location, 0 otherwise
+#                   'tumble':31 # 1 where Puppy fell over, 0 otherwise
+
+    # TODO: !!!!!!!!!!!!!!!!!!!! solve issue with optional gait,ground,tumble,reset !!!!!!!!!!!!!!!!!!!!!!!!!
+
+    idx_motor = [idx_signals[k] for k in ['trg0', 'trg1', 'trg2', 'trg3']]
+    idx_sensor = [idx_signals[k] for k in ['hip0', 'hip1', 'hip2', 'hip3',
+                                           'knee0', 'knee1', 'knee2', 'knee3',
+                                           'touch0', 'touch1', 'touch2', 'touch3',
+                                           'accelerometer_x', 'accelerometer_y', 'accelerometer_z',
+                                           'gyro_x', 'gyro_y', 'gyro_z',
+                                           'compass_x', 'compass_y', 'compass_z',
+                                           'puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z']]
+    idx_gps = [idx_signals[k] for k in ['puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z',]]
+    idx_terrain = idx_signals['ground']
+    idx_reset = idx_signals['reset']
+    idx_tumble = idx_signals['tumble']
+    idx_gait = idx_signals['gait']
+    
+    idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
+                      [16,17,18], [19,20,21], [22,23,24], [25,26,27]]
+    
+    names_modalities = ['Motor commands', 'Hip angles', 'Knee angles', 'Touch pressure', 'Acceleration', 'Gyroscope', 'Compass', 'Position']
+    units_modalities = ['rad', 'rad', 'rad', 'N', 'm/s^2', 'rad/s', 'north vector', 'm']
     
     def __init__(self, *args, **kwargs):
         '''
@@ -153,44 +191,11 @@ class PuppyData(RobotData):
         self.i_chunk = np.array([0])
         self.nChunks = 1
         
-        # TODO: find a way to load default PuppyData's index map (in case no datasets-field is given) without loading the data twice! 
-        # default signals:
-        # FL: front left, FR: front right, HL: hind left, HR: hind right
-        # X: front-back axis, Y: left-right axis, Y: top-bottom axis
-        idx_signals = {'trg0':0, 'trg1':1, 'trg2':2, 'trg3':3, # Motor target angles in rad
-                       'hip0':4, 'hip1':5, 'hip2':6, 'hip3':7, # hip joint angles in rad
-                       'knee0':8, 'knee1':9, 'knee2':10, 'knee3':11, # knee joint angles in rad
-                       'touch0':12, 'touch1':13, 'touch2':14, 'touch3':15, # Touch sensors at the feet some pressure unit
-                       'accelerometer_x':16, 'accelerometer_y':17, 'accelerometer_z':18, # acceleration sensors in m/s
-                       'gyro_x':19, 'gyro_y':20, 'gyro_z':21, # gyroscope (maybe in rad/s?)
-                       'compass_x':22, 'compass_y':23, 'compass_z':24, # magnetometer
-                       'puppyGPS_x':25, 'puppyGPS_y':26, 'puppyGPS_z':27, # Global Positioning Sensor in world coordinated
-                       'gait':28, # index of the current gait 
-                       'ground':29, # index of the current terrain Puppy's center of mass is at (numbering defined in individual experiment)
-                       'reset':30, # 1 where Puppy was respawned at a new location, 0 otherwise
-                       'tumble':31} # 1 where Puppy fell over, 0 otherwise
+    def loadData(self, experiment=None, datasets=None):
+        if datasets is None or len(datasets)==0:
+            datasets = [filter(lambda x:self.idx_signals[x]==i, self.idx_signals)[0] for i in range(len(self.idx_signals))]
+        super(PuppyData, self).loadData(experiment, datasets)
         
-#        idx_motor = [idx_signals[k] for k in ['M_FL', 'M_FR', 'M_HL', 'M_HR']]
-#        idx_sensor = [idx_signals[k] for k in ['H_FL', 'H_FR', 'H_HL', 'H_HR',
-#                                               'K_FL', 'K_FR', 'K_HL', 'K_HR',
-#                                               'T_FL', 'T_FR', 'T_HL', 'T_HR',
-#                                               'A_X', 'A_Y', 'A_Z',
-#                                               'G_X', 'G_Y', 'G_Z',
-#                                               'M_X', 'M_Y', 'M_Z',
-#                                               'GPS_X', 'GPS_Y', 'GPS_Z']]
-#        idx_gps = [idx_signals[k] for k in ['GPS_X', 'GPS_Y', 'GPS_Z',]]
-#        idx_terrain = idx_signals['ground']
-#        idx_reset = idx_signals['reset']
-#        idx_tumble = idx_signals['tumble']
-#        idx_gait = idx_signals['gait']
-#        
-#        idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
-#                          [16,17,18], [19,20,21], [22,23,24], [25,26,27]]
-#        
-#        names_modalities = ['Motor commands', 'Hip angles', 'Knee angles', 'Touch pressure', 'Acceleration', 'Gyroscope', 'Compass', 'Position']
-#        units_modalities = ['rad', 'rad', 'rad', 'N', 'm/s^2', 'rad/s', 'north vector', 'm']
-        
-    # TODO: check method:
     def cleanData(self, min_chunk_size=1000,
                   remove_tumbling=True, pre_delete_tumble=20, post_delete_tumble=20,
                   remove_reset=True, pre_delete_reset=0, post_delete_reset=20):

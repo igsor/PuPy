@@ -103,7 +103,7 @@ class WebotsRobotMixin(object):
         
         # init events
         self._events = {}
-        self._emittors = {}
+        self._emitters = {}
     
     def run(self):
         """Main controller loop. Runs infinitely unless aborted by
@@ -204,17 +204,17 @@ class WebotsRobotMixin(object):
         the ``emittor_name`` is :py:keyword:`None`, the message will
         be sent through all available devices."""
         if emittor_name is None:
-            for emittor in self._emittors.values():
+            for emittor in self._emitters.values():
                 emittor.send(msg)
         else:
-            self._emittors[name].send(msg)
+            self._emitters[emittor_name].send(msg)
     
-    def add_emittor(self, name):
+    def add_emitter(self, name):
         """Add an emittor called ``name``."""
-        if name in self._emittors:
+        if name in self._emitters:
             return
         
-        self._emittors[name] = self.getEmitter(name)
+        self._emitters[name] = self.getEmitter(name)
     
     def motor_names(self):
         """Return the motor's names."""
@@ -395,7 +395,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         
         # register receiver
         self.add_receiver('fromSupervisorReceiver', event_handlers)
-        self.add_emittor('toSupervisorEmitter')
+        self.add_emitter('toSupervisorEmitter')
     
     def _set_targets(self, current_target):
         """Set the targets."""
