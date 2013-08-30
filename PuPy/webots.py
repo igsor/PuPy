@@ -746,6 +746,31 @@ class RevertOnDemand(RevertCheck, ReceiverSubcheck):
     def __str__(self):
         return "RevertOnDemand"
 
+class RevertOutOfArena(RevertCheck):
+    """Revert the simulation if it comoes too close to the arena boundary.
+    
+    ``distance``
+        The robot's distance to the arena boundary.
+    
+    ``arena_size``
+        Size of the arena as list [min_x, max_x, min_z, max_z].
+    
+    """
+    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), *args, **kwargs):
+        super(RevertOutOfArena, self).__init__(*args, **kwargs)
+        self.arena_size = arena_size
+        self.distance = distance
+    
+    def __call__(self, supervisor):
+        pos_curr = supervisor.getFromDef('puppy').getPosition()
+        if (pos_curr[0]>self.arena_size[1]-self.distance or pos_curr[0]<self.arena_size[0]+self.distance 
+         or pos_curr[2]>self.arena_size[3]-self.distance or pos_curr[2]<self.arena_size[2]+self.distance):
+            supervisor.emitter.send('out_of_arena')
+            self.revert(supervisor)
+    
+    def __str__(self):
+        return "Out-Of-Arena"
+
 class RespawnTumbled(RespawnCheck):
     """Respawn the robot if it has tumbled.
     
