@@ -165,10 +165,10 @@ class PuppyData(RobotData):
                                            'compass_x', 'compass_y', 'compass_z',
                                            'puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z']]
     idx_gps = [idx_signals[k] for k in ['puppyGPS_x', 'puppyGPS_y', 'puppyGPS_z',]]
-    idx_terrain = idx_signals['ground']
-    idx_reset = idx_signals['reset']
-    idx_tumble = idx_signals['tumble']
-    idx_gait = idx_signals['gait']
+#    idx_terrain = idx_signals['ground']
+#    idx_reset = idx_signals['reset']
+#    idx_tumble = idx_signals['tumble']
+#    idx_gait = idx_signals['gait']
     
     idx_modalities = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
                       [16,17,18], [19,20,21], [22,23,24], [25,26,27]]
