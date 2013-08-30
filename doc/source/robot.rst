@@ -99,4 +99,3 @@ Reference
     :members:
 
 .. autofunction:: event_handler_template
-

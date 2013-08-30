@@ -155,3 +155,12 @@ Reference
 
 .. autoclass:: PuppyCollector
     :show-inheritance:
+
+Inheritance
+-----------
+
+.. inheritance-diagram::
+    RobotActor
+    PuppyCollector
+    PuppyActor
+    

@@ -81,6 +81,12 @@ class Normalization(object):
             warnings.warn('Tried to get normalization parameters for an unknown sensor (%s)'%sensor)
             return (0.0, 1.0)
     
+    def __contains__(self, key):
+        """Return :py:keyword:`True` if normalization for ``key`` is
+        prepared.
+        """
+        return key in self._sensor_mapping
+    
     def load(self, pth):
         """Load normalization parameters from a *JSON* file at ``pth``.
         
