@@ -168,15 +168,15 @@ class _PuppyCollector_h5py(RobotActor):
         # create experiment storage
         import h5py
         self.fh = h5py.File(expfile,'a')
-        name = str(len(self.fh.keys()))
-        self.grp = self.fh.create_group(name)
+        self.grp_name = str(len(self.fh.keys()))
+        self.grp = self.fh.create_group(self.grp_name)
         amngr = h5py.AttributeManager(self.grp)
         amngr.create('time', time.ctime())
         if headers is not None:
             for k in headers:
                 amngr.create(k, headers[k])
         
-        print "Using storage", name
+        print "Using storage", self.grp_name
     
     def set_header(self, name, data):
         """Add custom header ``data`` to the current group. The data is
