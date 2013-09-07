@@ -864,6 +864,35 @@ class QuitMaxIter(SupervisorCheck):
     def __str__(self):
         return "MaxIter"
 
+class QuitTumbled(SupervisorCheck):
+    """Quit webots if puppy tumbled. (in milliseconds!)
+    
+    ``grace_time_ms``
+        Let the robot run after tumbling for some time before the
+        simulation is reverted. In milliseconds.
+    
+    """
+    def __init__(self, grace_time_ms=2000):
+        super(QuitTumbled, self).__init__()
+        self.grace_time = grace_time_ms
+        self._queue = Queue.deque(maxlen=5)
+    
+    def __call__(self, supervisor):
+        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
+            self._queue.append(supervisor.num_iter)
+            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
+                
+                # let grace period pass
+                supervisor.step(self.grace_time)
+                
+                # quit
+                print "Quit simulation (%s)" % (str(self))
+                supervisor.simulationQuit(0)
+    
+    
+    def __str__(self):
+        return "Tumbled"
+
 class QuitOnDemand(SupervisorCheck, ReceiverSubcheck):
     """Stop the simulation webots if a stop message is received.
     
