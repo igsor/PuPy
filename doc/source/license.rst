@@ -10,5 +10,5 @@ This project is released under the terms of the 3-clause BSD License.
 
 The logo is published under the Creative Commons Attribution 3.0 license (CC BY).
 
-:ref:`http://creativecommons.org/licenses/by/3.0/`
+`http://creativecommons.org/licenses/by/3.0/ <http://creativecommons.org/licenses/by/3.0/>`_
 
