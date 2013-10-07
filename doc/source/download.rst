@@ -28,7 +28,7 @@ If you're using `distutils <http://docs.python.org/distutils/>`_, type::
 
 The project is also available on git, with the package and all supplementary data:
 
-    https://github.com/igsor/PuPy
+    git clone https://github.com/igsor/PuPy
 
 
 Make sure all dependencies are installed on your system. This obviously includes
