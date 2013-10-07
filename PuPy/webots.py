@@ -201,7 +201,7 @@ class WebotsRobotMixin(object):
     
     def send_msg(self, msg, emittor_name=None):
         """Send a message ``msg`` through a device ``emittor_name``. If
-        the ``emittor_name`` is :py:keyword:`None`, the message will
+        the ``emittor_name`` is :py:const:`None`, the message will
         be sent through all available devices."""
         if emittor_name is None:
             for emittor in self._emitters.values():

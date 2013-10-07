@@ -337,7 +337,6 @@ class GaitParametersCollector(PuppyActor):
             epoch['phase_HR'] = np.array([current_params['phase'][3]])
         return self.observer(epoch, time_start_ms, time_end_ms, step_size_ms)
 
-
 class TumbleCollector(PuppyActor):
     """A collector that records when Puppy tumbles."""
     def __init__(self, observer, sampling_period_ms, ctrl_period_ms):
