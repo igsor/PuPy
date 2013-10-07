@@ -1,4 +1,6 @@
 
+.. _downloads:
+
 Download
 ========
 
@@ -23,6 +25,11 @@ If you're using `distutils <http://docs.python.org/distutils/>`_, type::
     sudo python setup.py install    # install using distutils (as root).
     #rm -R .                        # remove source. If desired, uncomment this line.
     #cd .. && rmdir PuPy*           # remove working directory. If desired, uncomment this line but be careful.
+
+The project is also available on git, with the package and all supplementary data:
+
+    https://github.com/igsor/PuPy
+
 
 Make sure all dependencies are installed on your system. This obviously includes
 [Python]_, as well as [SciPy]_ and [NumPy]_. Furthermore, either [h5py]_ or [PyTables]_
@@ -59,30 +66,29 @@ script together with the other data, thus only a symlink is created (as root)::
 
 The same procedure may be repeated for ``world_splitter.sh``.
 
-
-Getting started
----------------
-
-.. todo::
-    Explanations and examples
+.. _available_downloads:
 
 Available downloads
 -------------------
 
-- :download:`PuPy-0.1 dev <_downloads/PuPy-0.1dev.tar.gz>` (latest)
+PuPy library and documentation by Nico Schmidt and Matthias Baumgartner:
 
-.. todo::
-    - Webots scripts
-    - Puppy model
-    - Other downloads?
-    - Links to dependencies?
+- :download:`PuPy-1.0 <_downloads/PuPy-1.0.tar.gz>` (latest)
 
-.. sth:
-    - :download:`This documentation (html) <dist/aiLib-0.1doc-html.tar.gz>` (current)
-    - :download:`This documentation (pdf) <dist/aiLib-0.1doc.pdf>` (current)
+- :download:`This documentation (pdf) <_downloads/PuPy-1.0-doc.pdf>`
+
+Supplementary scripts and the Puppy webots model by Matej Hoffmann and Stefan Hutter:
+
+- :download:`Webots data and supplementary scripts <_downloads/additionals.tar.gz>`
+
+The logo by Karin Baumgartner:
+
+- :download:`PuPy Logo (svg) <_downloads/logo.svg>`
+
+- :download:`PuPy Logo (pdf) <_downloads/logo.pdf>`
 
 License
 -------
 
-This project is released under the terms of the 3-clause BSD License. See the section
+This project is released under the terms of the 3-clause BSD License and CC BY. See the section
 :ref:`license` for details.

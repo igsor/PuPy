@@ -125,6 +125,7 @@ between the two gaits defined. The figure below gives an example of this.
 
 .. image:: _static/puppy_gait.png
     :width: 500
+    :align: center
 
 Reference
 ---------

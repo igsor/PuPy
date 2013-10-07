@@ -4,6 +4,9 @@
 Puppy Python Controller (PuPy)
 ==============================
 
+.. image:: ../../data/logo_large.png
+    :align: center
+
 There's this robot, Puppy, a four-legged artificial dog. Although it is
 actually built and can be controlled in the real-world, some applications
 require its simulated version. This may for example be to prevent the motors

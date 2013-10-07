@@ -73,12 +73,9 @@ When experimenting with several controllers and environments, webots
 requires a world file (and some others) for each configuration. Usually,
 these differ only in some aspects while most of the content is identical.
 Also, the controller is part of the configuration, making it very annoying
-to keep track of subtle differences, and keeping track of working versions.
+to keep track of subtle differences and working versions.
 To support development, two small scripts are provided which take care of
 this problem.
-
-.. todo::
-    Webots world file structure
 
 Splitter
 ~~~~~~~~
@@ -128,6 +125,6 @@ the changes take effect after reverting the simulation.
 Downloads
 ---------
 
-.. todo::
-    - webots source downloads (Puppy, worlds)
-    - supporting material downloads
+The above scripts are deployed together with the Puppy model, originally developed
+and contributed to this project by Matej Hoffmann and Stefan Hutter. All files can
+be retrieved from the the :ref:`downloads` page (see :ref:`available_downloads`).

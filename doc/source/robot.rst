@@ -6,12 +6,6 @@ Robot
 
 .. contents::
 
-
-.. todo::
-    Switch reference from WebotsPuppyMixin to WebotsRobotMixin
-    Example how to build new robots
-    
-
 Introduction
 ------------
 
