@@ -728,7 +728,7 @@ class RespawnOnDemand(RespawnCheck, ReceiverSubcheck):
         return "OnDemand"
 
 class RevertOnDemand(RevertCheck, ReceiverSubcheck):
-    """Respawn if the supervisor receives a *respawn_on_demand* message.
+    """Revert if the supervisor receives a *respawn_on_demand* message.
     Note that since messages are popped from the receiver stack, this
     check doesn't interoperate with other to-supervisor communication
     checks (messages will be lost).
@@ -756,7 +756,7 @@ class RevertOutOfArena(RevertCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), *args, **kwargs):
+    def __init__(self, distance=5, arena_size=(0, 0, 0, 0), *args, **kwargs):
         super(RevertOutOfArena, self).__init__(*args, **kwargs)
         self.arena_size = arena_size
         self.distance = distance
@@ -812,7 +812,7 @@ class RespawnOutOfArena(RespawnCheck):
         Size of the arena as list [min_x, max_x, min_z, max_z].
     
     """
-    def __init__(self, distance=2000, arena_size=(0, 0, 0, 0), *args, **kwargs):
+    def __init__(self, distance=0, arena_size=(0, 0, 0, 0), *args, **kwargs):
         RespawnCheck.__init__(self, arena_size=arena_size, *args, **kwargs)
         self.distance = distance
     
