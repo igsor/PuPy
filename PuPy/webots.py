@@ -746,6 +746,7 @@ class RevertOnDemand(RevertCheck, ReceiverSubcheck):
     def __str__(self):
         return "RevertOnDemand"
 
+
 class RevertOutOfArena(RevertCheck):
     """Revert the simulation if it comoes too close to the arena boundary.
     
@@ -770,6 +771,40 @@ class RevertOutOfArena(RevertCheck):
     
     def __str__(self):
         return "Out-Of-Arena"
+
+
+class RespawnInactive(RespawnCheck):
+    """Respawn if the robot cannot move for a given time.
+    
+    ``grace_iterations``
+        Let the robot run for some iterations after tumbling before it is
+        respawned. In milliseconds
+    
+    """
+    def __init__(self, grace_iterations=2, *args, **kwargs):
+        RespawnCheck.__init__(self, *args, **kwargs)
+        self.grace_iterations = grace_iterations
+        self._queue = Queue.deque(maxlen=grace_iterations)
+        self.lastPos = [0,0,0]
+
+    def __call__(self, supervisor):
+        speed = np.linalg.norm(np.subtract(supervisor.getFromDef('puppy').getPosition(), self.lastPos))
+        self.lastPos = supervisor.getFromDef('puppy').getPosition()
+        
+        if speed < 0.0001:
+            print('speed: ', speed, ' count: ', len(self._queue))
+            self._queue.append(supervisor.num_iter)
+            if len(self._queue) >= self.grace_iterations:
+                # revert
+                self._queue.clear()
+                supervisor.emitter.send('Inactive')
+                self.respawn(supervisor)
+        else:
+            self._queue.clear()
+    
+    def __str__(self):
+        return "Inactive"
+
 
 class RespawnTumbled(RespawnCheck):
     """Respawn the robot if it has tumbled.
