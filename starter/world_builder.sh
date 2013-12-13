@@ -15,7 +15,7 @@ OPTIONS:
    -p      Puppy
    -f      Overwrite target
    -b      Directory of your webots data
-   -m      starting mode of webots: stop, realtime (default), run or fast
+   -m      starting mode of webots: pause (=stop in older versions), realtime (default), run or fast
    -h      Show this message
 EOF
 }
@@ -30,7 +30,7 @@ SCTRL=
 WORLD="default"
 PUPPY="default"
 SUPERVISOR="default"
-MODE="stop"
+MODE="realtime"
 while getopts “hp:s:t:c:b:m:” OPTION
 do
      case $OPTION in
