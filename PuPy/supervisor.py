@@ -108,8 +108,7 @@ class ReceiverCheck(SupervisorCheck):
         E.g. ['revert on demand', PuPy.RevertAction(grace_time=2000),
               'quit on demand', PuPy.QuitAction()]
     """
-    def __init__(self, **kwargs):
-        actions = kwargs.pop('actions')
+    def __init__(self, actions, **kwargs):
         super(ReceiverCheck, self).__init__(**kwargs)
         
         self.actions = {}
@@ -198,7 +197,7 @@ class RespawnAction(SupervisorAction):
     _reset_random = 2
     
     def __init__(self, **kwargs):
-        self.reset_policy = kwargs.pop('reset_policy', _reset_center)
+        self.reset_policy = kwargs.pop('reset_policy', self._reset_center)
         self.arena_size = kwargs.pop('arena_size', (0, 0, 0, 0))
         super(RespawnAction, self).__init__(**kwargs)
     
@@ -255,8 +254,13 @@ def supervisorCheckBuilder(cls_check, cls_action, **kwargs):
     return cls(**kwargs)
 
 
-
-
+# for back-compatibility:
+def RespawnOnDemand(**kwargs):
+    return ('respawn_on_demand', RespawnAction(**kwargs))
+def RevertOnDemand(**kwargs):
+    return ('revert_on_demand', RevertAction(**kwargs))
+def QuitOnDemand():
+    return ('quit_on_demand', QuitAction())
 NotifyTumbled = supervisorCheckMixin(TumbledCheck, NotifyAction)
 RevertTumbled = supervisorCheckMixin(TumbledCheck, RevertAction)
 RevertMaxIter = supervisorCheckMixin(MaxIterCheck, RevertAction)

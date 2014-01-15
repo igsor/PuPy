@@ -72,9 +72,9 @@ class Gait(object):
 
 class NoneChild(object):
     """Dummy class for actor's child."""
-    def __call__(self, *args, **kwargs):
+    def __call__(self, **kwargs):
         return None
-    def _get_initial_targets(self, *args, **kwargs):
+    def _get_initial_targets(self, **kwargs):
         return None
 
 class RobotActor(object):
@@ -139,28 +139,29 @@ class RobotActor(object):
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         raise NotImplementedError()
     
-    def get_from_child(self, name):
+    def get_from_child(self, name, default=None):
         """return member ``name`` from first child class in the hierarchy that has this member."""
         if hasattr(self.child, name):
             return getattr(self.child, name)
         elif hasattr(self.child, 'get_from_child'):
             return self.child.get_from_child(name)
         else:
-            return None
+            return default
             
-    def signal(self, event):
-        """send signal ``event`` to all child classes."""
+    def signal(self, msg, **kwargs):
+        """broadcast signal message ``msg`` to all child classes."""
         if hasattr(self.child, 'signal'):
-            self.child.signal(event)
-        self._signal(event)
+            self.child.signal(msg, **kwargs)
+        self._signal(msg, **kwargs)
     
-    def _signal(self, event):
+    def _signal(self, msg, **kwargs):
         """Template method for subclasses. Overload this method to enable signal receiving."""
         pass
     
-    def _get_initial_targets(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         """Template method for subclasses. Use this to return a motor targets-iterator at time 0."""
-        return self.child._get_initial_targets(epoch, time_start_ms, time_end_ms, step_size_ms)
+#        return self.child._get_initial_targets(time_start_ms, time_end_ms, step_size_ms)
+        return self.get_from_child('_get_initial_targets', lambda a,b,c:None)(time_start_ms, time_end_ms, step_size_ms)
         
 
 class PuppyActor(RobotActor):
@@ -179,8 +180,8 @@ class RandomGaitControl(RobotActor):
         print self.gait
         return self.gait.iter(time_start_ms, step_size_ms)
     
-    def _get_initial_targets(self, epoch, time_start_ms, time_end_ms, step_size_ms):
-        return self.__call__(epoch, time_start_ms, time_end_ms, step_size_ms)
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
 class ConstantGaitControl(RobotActor):
     """Given a gait, always apply it."""
@@ -191,8 +192,8 @@ class ConstantGaitControl(RobotActor):
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         return self.gait.iter(time_start_ms, step_size_ms)
     
-    def _get_initial_targets(self, epoch, time_start_ms, time_end_ms, step_size_ms):
-        return self.__call__(epoch, time_start_ms, time_end_ms, step_size_ms)
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
 class SequentialGaitControl(RobotActor):
     """Execute a predefined sequence of gaits.
@@ -209,8 +210,8 @@ class SequentialGaitControl(RobotActor):
         self.gait = self.gait_iter.next()
         return self.gait.iter(time_start_ms, step_size_ms)
     
-    def _get_initial_targets(self, epoch, time_start_ms, time_end_ms, step_size_ms):
-        return self.__call__(epoch, time_start_ms, time_end_ms, step_size_ms)
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
 class _RobotCollector_h5py(RobotActor):
     """Collect sensor readouts and store them in a file.
@@ -295,8 +296,9 @@ class _RobotCollector_h5py(RobotActor):
         self.fh.flush()
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _signal(self, event):
-        if isinstance(event, str) and event=='new_episode':
+    def _signal(self, msg, **kwargs):
+        super(_RobotCollector_h5py, self)._signal(msg, **kwargs)
+        if isinstance(msg, str) and msg=='new_episode':
             # start a new episode, i.e. create a new group in expfile
             # and store all new epochs there:
             self._create_group(str(int(self.grp_name)+1))
@@ -364,8 +366,9 @@ class _RobotCollector_pytables(RobotActor):
         self.fh.flush()
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _signal(self, event):
-        if isinstance(event, str) and event=='new_episode':
+    def _signal(self, msg, **kwargs):
+        super(_RobotCollector_pytables, self)._signal(msg, **kwargs)
+        if isinstance(msg, str) and msg=='new_episode':
             # start a new episode, i.e. create a new group in expfile
             # and store all new epochs there:
             warnings.warn("starting new episode not yet implemented in ``_RobotCollector_pytables``.")
@@ -488,7 +491,7 @@ class TumbleCollector(RobotActor):
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
-        self.event_handler = self._get_event_handler()
+        self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
@@ -496,11 +499,11 @@ class TumbleCollector(RobotActor):
             self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _get_event_handler(self):
-        def func(robot, epoch, current_time, msg):
-            if msg=='tumbled':
-                self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
-        return func
+    def _signal(self, msg, **kwargs):
+        super(TumbleCollector, self)._signal(msg, **kwargs)
+        if msg=='tumbled':
+            current_time = kwargs['current_time']
+            self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
 
 class ResetCollector(RobotActor):
     """A collector that records when Puppy was reset (respawned)."""
@@ -509,7 +512,7 @@ class ResetCollector(RobotActor):
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
-        self.event_handler = self._get_event_handler()
+        self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
@@ -517,8 +520,8 @@ class ResetCollector(RobotActor):
             self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _get_event_handler(self):
-        def func(robot, epoch, current_time, msg):
-            if msg=='reset':
-                self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
-        return func
+    def _signal(self, msg, **kwargs):
+        super(ResetCollector, self)._signal(msg, **kwargs)
+        if msg=='reset':
+            current_time = kwargs['current_time']
+            self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1

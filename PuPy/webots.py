@@ -147,7 +147,7 @@ class WebotsRobotMixin(object):
         epoch = Queue.deque(maxlen=self.ctrl_period/self.sampling_period)
         
         # get initial target from actor
-        motor_targets = self.actor._get_initial_targets(epoch, current_time, current_time + self.ctrl_period, self.motor_period)
+        motor_targets = self.actor._get_initial_targets(current_time, current_time + self.ctrl_period, self.motor_period)
         current_target = motor_targets.next()
         self._set_targets(current_target)
         
@@ -165,6 +165,11 @@ class WebotsRobotMixin(object):
                 for receiver in self._events:
                     while receiver.getQueueLength() > 0:
                         msg = receiver.getData()
+                        # use the RobotActor way of event-handling:
+                        if hasattr(self.actor, "signal") and callable(self.actor.signal):
+                            self.actor.signal(msg, current_time=current_time, epoch=epoch)
+                        
+                        # use additional optional event handlers:
                         for handler in self._events[receiver]:
                             handler(self, epoch, current_time, msg)
                         receiver.nextPacket()
@@ -266,11 +271,6 @@ class WebotsRobotMixin(object):
     
     def _set_targets(self, current_target):
         """Abstract function for setting the actuator targets.
-        """
-        raise NotImplementedError()
-    
-    def _get_initial_targets(self):
-        """Abstract function for getting the initial actuator targets (iterator).
         """
         raise NotImplementedError()
     
@@ -404,12 +404,6 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         """Set the targets."""
         for trg, (name, motor) in zip(current_target, self._motors):
             motor.setPosition(trg)
-            
-    def _get_initial_targets(self):
-        """Return zero-targets that are sent to the motors in the very
-        first time step current_time=0.
-        """
-        return iter([[0.,0.,0.,0.]])
 
 class WebotsSupervisorMixin(object):
     """Webots supervisor 'controller'. It actively probes the simulation,
