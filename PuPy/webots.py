@@ -358,6 +358,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         _s_gyro = 'gyro'
         _s_compass = 'compass'
         _s_gps = 'puppyGPS'
+        #_s_cam = 'camera'
         
         _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
         _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
@@ -371,6 +372,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         gps = self.getGPS(_s_gps)
         servos = [self.getServo(s) for s in _s_hip + _s_knee]
         touch = [self.getTouchSensor(t) for t in _s_touch]
+        #cam = self.getCamera(_s_cam)
         
         # enable sensors
         acc.enable(self.sampling_period)
@@ -381,6 +383,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
             sensor.enablePosition(self.sampling_period)
         for sensor in touch:
             sensor.enable(self.sampling_period)
+        #cam.enable(self.sampling_period)
         
         # register sensors
         self.add_sensor(_s_accel, acc.getValues, dim=3)

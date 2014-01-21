@@ -28,6 +28,7 @@ def load_gaits(filename=PuPy.__file__[:-17]+'data'+os.sep+'puppy_gaits.json', na
         gaits = dict([(name, Gait(gaits[name], name)) for name in gaits])          
     return gaits
 
+
 class Gait(object):
     """Motor target generator, using predefined gait_switcher.
     
@@ -72,9 +73,9 @@ class Gait(object):
 
 class NoneChild(object):
     """Dummy class for actor's child."""
-    def __call__(self, **kwargs):
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         return None
-    def _get_initial_targets(self, **kwargs):
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return None
 
 class RobotActor(object):
@@ -168,6 +169,7 @@ class PuppyActor(RobotActor):
     """Deprecated alias for :py:class:`RobotActor`."""
     pass
 
+
 class RandomGaitControl(RobotActor):
     """From a list of available gaits, randomly select one."""
     def __init__(self, gaits):
@@ -183,6 +185,7 @@ class RandomGaitControl(RobotActor):
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
+
 class ConstantGaitControl(RobotActor):
     """Given a gait, always apply it."""
     def __init__(self, gait):
@@ -194,6 +197,7 @@ class ConstantGaitControl(RobotActor):
     
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
+
 
 class SequentialGaitControl(RobotActor):
     """Execute a predefined sequence of gaits.
@@ -212,6 +216,7 @@ class SequentialGaitControl(RobotActor):
     
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
+
 
 class _RobotCollector_h5py(RobotActor):
     """Collect sensor readouts and store them in a file.
@@ -303,6 +308,7 @@ class _RobotCollector_h5py(RobotActor):
             # and store all new epochs there:
             self._create_group(str(int(self.grp_name)+1))
 
+
 class _RobotCollector_pytables(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the PyTables module.
@@ -373,6 +379,7 @@ class _RobotCollector_pytables(RobotActor):
             # and store all new epochs there:
             warnings.warn("starting new episode not yet implemented in ``_RobotCollector_pytables``.")
 
+
 class RobotCollector(_RobotCollector_h5py):
     """Collect sensor readouts and store them in a file.
     
@@ -400,6 +407,7 @@ class RobotCollector(_RobotCollector_h5py):
         A *dict* is expected. Default is None (no headers).
     """
     pass
+
 
 class PuppyCollector(RobotCollector):
     """Deprecated alias for :py:class:`RobotCollector`."""
@@ -484,6 +492,7 @@ class GaitParametersCollector(RobotActor):
             epoch['phase_HR'] = np.repeat([current_params['phase'][3]], self.ctrl_period_ms/self.sampling_period_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
+
 class TumbleCollector(RobotActor):
     """A collector that records when Puppy tumbles."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, **kwargs):
@@ -505,6 +514,7 @@ class TumbleCollector(RobotActor):
             current_time = kwargs['current_time']
             self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
 
+
 class ResetCollector(RobotActor):
     """A collector that records when Puppy was reset (respawned)."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, **kwargs):
@@ -525,3 +535,65 @@ class ResetCollector(RobotActor):
         if msg=='reset':
             current_time = kwargs['current_time']
             self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
+
+
+class OnlinePrinter(RobotActor):
+    """An actor that prints out desired variables from the epoch."""
+    def __init__(self, child, var_list=[], separator=', ', **kwargs):
+        RobotActor.__init__(self, child, **kwargs)
+        self.var_list = var_list
+        self.separator = separator
+        import sys
+        self.sys = sys
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        s = ''
+        for v in self.var_list:
+            x = lambda a:a
+            if isinstance(v, list) and callable(v[1]):
+                x = v[1]
+                v = v[0]
+            else:
+                x = lambda a:a
+            if not v in epoch:
+                warnings.warn('variable "%s" not in epoch. skipping...'%v)
+                continue
+            s += v + ': ' + str( x(epoch[v]) )
+            s += self.separator
+        if len(self.separator)>0:
+            s = s[:-len(self.separator)]
+        if len(s)>0:
+            print s
+            self.sys.stdout.flush()
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+        
+
+
+class OnnlinePlotter(RobotActor):
+    """An actor that plots data while the robot is running."""
+    def __init__(self, child, var_list=[], **kwargs):
+        super(OnnlinePlotter, self).__init__(child, **kwargs)
+        self.var_list = var_list
+        import pylab as pl
+        pl.ion()
+        self.pl = pl
+        self.fig, self.ax = pl.subplots(len(var_list), 1, True)
+        self.line = []
+        for i,v in enumerate(self.var_list):
+            self.ax[i].set_ylabel(v)
+            self.line.append(self.ax[i].plot([],[])[0])
+        self.ax[-1].set_xlabel('time')        
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        for i,v in enumerate(self.var_list):
+            dat = epoch[v]
+            self.line[i].set_xdata(np.append(self.line[i].get_xdata(), time_start_ms))
+            self.line[i].set_ydata(np.append(self.line[i].get_ydata(), dat))
+        self.pl.draw()
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _signal(self, msg, **kwargs):
+        super(ResetCollector, self)._signal(msg, **kwargs)
+        if msg=='reset':
+            for ax in self.ax:
+                ax.cla()
