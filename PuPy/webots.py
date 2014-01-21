@@ -146,10 +146,8 @@ class WebotsRobotMixin(object):
         loop_wait = gcd(self.event_period, loop_wait)
         epoch = Queue.deque(maxlen=self.ctrl_period/self.sampling_period)
         
-        # first epoch targets
-        motor_targets = self.actor(dict(), current_time, current_time + self.ctrl_period, self.motor_period)
-        
-        # initial target
+        # get initial target from actor
+        motor_targets = self.actor._get_initial_targets(current_time, current_time + self.ctrl_period, self.motor_period)
         current_target = motor_targets.next()
         self._set_targets(current_target)
         
@@ -167,6 +165,11 @@ class WebotsRobotMixin(object):
                 for receiver in self._events:
                     while receiver.getQueueLength() > 0:
                         msg = receiver.getData()
+                        # use the RobotActor way of event-handling:
+                        if hasattr(self.actor, "signal") and callable(self.actor.signal):
+                            self.actor.signal(msg, current_time=current_time, epoch=epoch)
+                        
+                        # use additional optional event handlers:
                         for handler in self._events[receiver]:
                             handler(self, epoch, current_time, msg)
                         receiver.nextPacket()
@@ -355,6 +358,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         _s_gyro = 'gyro'
         _s_compass = 'compass'
         _s_gps = 'puppyGPS'
+        #_s_cam = 'camera'
         
         _s_target = ('trg0', 'trg1', 'trg2', 'trg3')
         _s_hip = ('hip0', 'hip1', 'hip2', 'hip3')
@@ -368,6 +372,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
         gps = self.getGPS(_s_gps)
         servos = [self.getServo(s) for s in _s_hip + _s_knee]
         touch = [self.getTouchSensor(t) for t in _s_touch]
+        #cam = self.getCamera(_s_cam)
         
         # enable sensors
         acc.enable(self.sampling_period)
@@ -378,6 +383,7 @@ class WebotsPuppyMixin(WebotsRobotMixin):
             sensor.enablePosition(self.sampling_period)
         for sensor in touch:
             sensor.enable(self.sampling_period)
+        #cam.enable(self.sampling_period)
         
         # register sensors
         self.add_sensor(_s_accel, acc.getValues, dim=3)
@@ -416,9 +422,7 @@ class WebotsSupervisorMixin(object):
         the one of :py:class:`SupervisorCheck`.
     
     """
-    def __init__(self, sampling_period_ms, checks=None):
-        if checks is None:
-            checks = []
+    def __init__(self, sampling_period_ms, checks=[]):
         self.checks = checks
         self.loop_wait = sampling_period_ms
         self.emitter = self.getEmitter('toRobotEmitter')
@@ -491,424 +495,6 @@ class RecordingSupervisor(WebotsSupervisorMixin):
         """Stop the animation.
         """
         self.stopAnimation()
-
-class SupervisorCheck(object):
-    """A template for supervisor's checks."""
-    def __call__(self, supervisor):
-        """Evalute the check and implement the consequences.
-        
-        ``supervisor``
-            The supervisor instance. For communication back to the
-            robot, an *emitter* is available through
-            *supervisor.emitter*.
-        
-        """
-        raise NotImplementedError()
-
-class NotifyCheck(SupervisorCheck):
-    """Print a notification if some condition holds.
-    
-    The ``timeout`` controls how often the notification is printed:
-    
-    * ``timeout`` = 0: The message is shown every time the check is run.
-    * ``timeout`` < 0: The message is shown only once. (the default)
-    * ``timeout`` > 0: The message is suppressed for the respective
-                       number of calls.
-    """
-    def __init__(self, timeout=-1):
-        self.timeout = timeout
-        self.notification_counter = 0
-    
-    def __call__(self, supervisor):
-        """Evalute the check, print a message iff some condition holds.
-        No further action is taken.
-        
-        ``supervisor``
-            The supervisor instance
-        
-        """
-        raise NotImplementedError()
-
-    def notify(self, supervisor, message=None):
-        if message is None:
-            message = str(self)
-        
-        if self.notification_counter == 0:
-            if self.timeout < 0:
-                self.notification_counter = -1
-            else:
-                self.notification_counter = self.timeout
-        else:
-            self.notification_counter -= 1
-            return
-        
-        print "Notification:", message
-
-class NotifyTumbled(NotifyCheck):
-    """Notify if Puppy has tumbled."""
-    def __init__(self, *args, **kwargs):
-        super(NotifyTumbled, self).__init__(*args, **kwargs)
-        self._queue = Queue.deque(maxlen=5)
-    
-    def __call__(self, supervisor):
-        """Notify if Puppy has tumbled."""
-        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.num_iter)
-            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
-                self.notify(supervisor)
-                self._queue.clear()
-    
-    def __str__(self):
-        return "Tumbled"
-
-class RevertCheck(SupervisorCheck):
-    """A template for supervisor's revert checks."""
-    def __call__(self, supervisor):
-        """Evalute the check, call ``revert`` iff the simulation should be
-        reverted.
-        
-        ``robot``
-            The supervisor instance
-        
-        """
-        raise NotImplementedError()
-    
-    def revert(self, supervisor):
-        """Revert the simulation.
-        """
-        print "Revert simulation (%s)" % (str(self))
-        supervisor._pre_revert_hook(str(self))
-        supervisor.simulationRevert()
-
-class RevertTumbled(RevertCheck):
-    """Revert the simulation if the robot has tumbled.
-    
-    ``grace_time_ms``
-        Let the robot run after tumbling for some time before the
-        simulation is reverted. In milliseconds.
-    
-    """
-    def __init__(self, grace_time_ms=2000):
-        super(RevertTumbled, self).__init__()
-        self.grace_time = grace_time_ms
-        self._queue = Queue.deque(maxlen=5)
-    
-    def __call__(self, supervisor):
-        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.num_iter)
-            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
-                
-                # let grace period pass
-                supervisor.step(self.grace_time)
-                
-                # revert
-                self._queue.clear()
-                self.revert(supervisor)
-    
-    def __str__(self):
-        return "Tumbled"
-
-class RevertMaxIter(RevertCheck):
-    """Revert the simulation if a maximum duration is exceeded.
-    
-    ``max_duration_ms``
-        Maximum time a simulation may run, in milliseconds. After
-        this limit, the simulation is reverted.
-    
-    """
-    def __init__(self, max_duration_ms):
-        super(RevertMaxIter, self).__init__()
-        self.max_iter = max_duration_ms
-    
-    def __call__(self, supervisor):
-        if supervisor.num_iter > self.max_iter:
-            self.revert(supervisor)
-    
-    def __str__(self):
-        return "MaxIter"
-
-class RespawnCheck(SupervisorCheck):
-    """A template for supervisor's respawn checks.
-    
-    ``reset_policy``
-        Where to respawn the robot (0=center [0,0], 1=current position,
-        2=random position). Instead of literals, use
-        *RespawnCheck._reset_center*, *RespawnCheck._reset_current*
-        and *RespawnCheck._reset_random*.
-        In case of random respawn the *arena_size* needs to be provided.
-    
-    ``arena_size``
-        Size of the arena as list [min_x, max_x, min_z, max_z].
-    
-    """
-    _reset_center = 0
-    _reset_current = 1
-    _reset_random = 2
-    
-    def __init__(self, reset_policy=_reset_center, arena_size=(0, 0, 0, 0)):
-        super(RespawnCheck, self).__init__()
-        self.reset_policy = reset_policy
-        self.arena_size = arena_size
-    
-    def __call__(self, supervisor):
-        """Evalute the check, call ``respawn`` iff the supervisor should be
-        respawned (reset to a new position).
-        
-        ``supervisor``
-            The supervisor instance
-        
-        """
-        raise NotImplementedError()
-    
-    def __str__(self):
-        raise NotImplementedError()
-    
-    def respawn(self, supervisor):
-        """Reset the robots position.
-        """
-        robot_def = supervisor.getFromDef('puppy')
-        pos_curr = robot_def.getPosition()
-        rot = [0, 1, 0, float(np.random.rand()*2.*np.pi)]
-        if self.reset_policy == self._reset_center:
-            new_pos = [0, 0]
-        elif self.reset_policy == self._reset_current:
-            new_pos = pos_curr[::2]
-        elif self.reset_policy == self._reset_random:
-            new_pos = [np.random.randint(self.arena_size[0], self.arena_size[1]),
-                       np.random.randint(self.arena_size[2], self.arena_size[3])]
-        
-        robot_def.getField('rotation').setSFRotation(rot)
-        robot_def.getField('translation').setSFVec3f([new_pos[0], 0.13, new_pos[1]]) # when tumbling, remain on same position
-        supervisor.emitter.send('reset')
-        print "Respawn robot (%s)" % (str(self))
-
-class ReceiverCheck(SupervisorCheck):
-    def __init__(self, subchecks=None, *args, **kwargs):
-        if subchecks is None:
-            subchecks = []
-        
-        self.checks = {}
-        for check in subchecks:
-            for msg in check.messages():
-                self.checks[msg] = check
-            
-        super(ReceiverCheck, self).__init__(*args, **kwargs)
-    
-    def __call__(self, supervisor):
-        while supervisor.receiver.getQueueLength() > 0:
-            msg = supervisor.receiver.getData()
-            supervisor.receiver.nextPacket()
-            if msg in self.checks:
-                func = self.checks[msg]
-                func(supervisor, msg)
-
-class ReceiverSubcheck(object):
-    def __call__(self, supervisor, msg):
-        raise NotImplementedError()
-    def messages(self):
-        return []
-
-class RespawnOnDemand(RespawnCheck, ReceiverSubcheck):
-    """Respawn if the supervisor receives a *respawn_on_demand* message.
-    Note that since messages are popped from the receiver stack, this
-    check doesn't interoperate with other to-supervisor communication
-    checks (messages will be lost).
-    """
-    def __init__(self, *args, **kwargs):
-        super(RespawnOnDemand, self).__init__(*args, **kwargs)
-    
-    def __call__(self, supervisor, msg):
-        if msg == 'respawn_on_demand':
-            self.respawn(supervisor)
-    
-    def messages(self):
-        return ['respawn_on_demand']
-    
-    def __str__(self):
-        return "OnDemand"
-
-class RevertOnDemand(RevertCheck, ReceiverSubcheck):
-    """Revert if the supervisor receives a *respawn_on_demand* message.
-    Note that since messages are popped from the receiver stack, this
-    check doesn't interoperate with other to-supervisor communication
-    checks (messages will be lost).
-    """
-    def __init__(self, *args, **kwargs):
-        super(RevertOnDemand, self).__init__(*args, **kwargs)
-    
-    def __call__(self, supervisor, msg):
-        if msg == 'revert_on_demand':
-            self.revert(supervisor)
-    
-    def messages(self):
-        return ['revert_on_demand']
-    
-    def __str__(self):
-        return "RevertOnDemand"
-
-class RevertOutOfArena(RevertCheck):
-    """Revert the simulation if it comoes too close to the arena boundary.
-    
-    ``distance``
-        The robot's distance to the arena boundary.
-    
-    ``arena_size``
-        Size of the arena as list [min_x, max_x, min_z, max_z].
-    
-    """
-    def __init__(self, distance=5, arena_size=(0, 0, 0, 0), *args, **kwargs):
-        super(RevertOutOfArena, self).__init__(*args, **kwargs)
-        self.arena_size = arena_size
-        self.distance = distance
-    
-    def __call__(self, supervisor):
-        pos_curr = supervisor.getFromDef('puppy').getPosition()
-        if (pos_curr[0]>self.arena_size[1]-self.distance or pos_curr[0]<self.arena_size[0]+self.distance 
-         or pos_curr[2]>self.arena_size[3]-self.distance or pos_curr[2]<self.arena_size[2]+self.distance):
-            supervisor.emitter.send('out_of_arena')
-            self.revert(supervisor)
-    
-    def __str__(self):
-        return "Out-Of-Arena"
-
-class RespawnTumbled(RespawnCheck):
-    """Respawn the robot if it has tumbled.
-    
-    ``grace_time_ms``
-        Let the robot run for some time after tumbling before it is
-        respawned. In milliseconds
-    
-    """
-    def __init__(self, grace_time_ms=2000, *args, **kwargs):
-        RespawnCheck.__init__(self, *args, **kwargs)
-        self.grace_time = grace_time_ms
-        self._queue = Queue.deque(maxlen=5)
-    
-    def __call__(self, supervisor):
-        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.num_iter)
-            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
-                
-                supervisor.emitter.send('tumbled_grace_start')
-                
-                # let grace period pass
-                supervisor.step(self.grace_time)
-                
-                # revert
-                self._queue.clear()
-                supervisor.emitter.send('tumbled')
-                self.respawn(supervisor)
-    
-    def __str__(self):
-        return "Tumbled"
-
-class RespawnOutOfArena(RespawnCheck):
-    """Respawn the robot if it comoes too close to the arena boundary.
-    
-    ``distance``
-        The robot's distance to the arena boundary.
-    
-    ``arena_size``
-        Size of the arena as list [min_x, max_x, min_z, max_z].
-    
-    """
-    def __init__(self, distance=0, arena_size=(0, 0, 0, 0), *args, **kwargs):
-        RespawnCheck.__init__(self, arena_size=arena_size, *args, **kwargs)
-        self.distance = distance
-    
-    def __call__(self, supervisor):
-        pos_curr = supervisor.getFromDef('puppy').getPosition()
-        if (pos_curr[0]>self.arena_size[1]-self.distance or pos_curr[0]<self.arena_size[0]+self.distance 
-         or pos_curr[2]>self.arena_size[3]-self.distance or pos_curr[2]<self.arena_size[2]+self.distance):
-            supervisor.emitter.send('out_of_arena')
-            self.respawn(supervisor)
-    
-    def __str__(self):
-        return "Out-Of-Arena"
-
-class RespawnMaxIter(RespawnCheck):
-    """Respawn the simulation if a maximum duration is exceeded.
-    
-    ``max_duration_ms``
-        Maximum time a simulation may run, in milliseconds. After
-        this limit, the robot respawns.
-    
-    """
-    def __init__(self, max_duration_ms, *args, **kwargs):
-        super(RevertMaxIter, self).__init__(*args, **kwargs)
-        self.max_iter = max_duration_ms
-    
-    def __call__(self, supervisor):
-        if supervisor.num_iter > self.max_iter:
-            self.respawn(supervisor)
-    
-    def __str__(self):
-        return "MaxIter"
-
-class QuitMaxIter(SupervisorCheck):
-    """Quit webots if a time limit is exceeded. (in milliseconds!)
-    
-    ``max_duration_ms``
-        Maximum running time, in milliseconds.
-    
-    """
-    def __init__(self, max_duration_ms):
-        super(QuitMaxIter, self).__init__()
-        self.max_iter = max_duration_ms
-    
-    def __call__(self, supervisor):
-        if supervisor.num_iter > self.max_iter:
-            print "Quit simulation (%s)" % (str(self))
-            supervisor.simulationQuit(0)
-    
-    def __str__(self):
-        return "MaxIter"
-
-class QuitTumbled(SupervisorCheck):
-    """Quit webots if puppy tumbled. (in milliseconds!)
-    
-    ``grace_time_ms``
-        Let the robot run after tumbling for some time before the
-        simulation is reverted. In milliseconds.
-    
-    """
-    def __init__(self, grace_time_ms=2000):
-        super(QuitTumbled, self).__init__()
-        self.grace_time = grace_time_ms
-        self._queue = Queue.deque(maxlen=5)
-    
-    def __call__(self, supervisor):
-        if supervisor.getFromDef('puppy').getOrientation()[4] < 0.15:
-            self._queue.append(supervisor.num_iter)
-            if len(self._queue) > 1 and self._queue[-1] - self._queue[0] < 15*supervisor.loop_wait:
-                
-                # let grace period pass
-                supervisor.step(self.grace_time)
-                
-                # quit
-                print "Quit simulation (%s)" % (str(self))
-                supervisor.simulationQuit(0)
-    
-    
-    def __str__(self):
-        return "Tumbled"
-
-class QuitOnDemand(SupervisorCheck, ReceiverSubcheck):
-    """Stop the simulation webots if a stop message is received.
-    
-    """
-    def __init__(self, *args, **kwargs):
-        super(QuitOnDemand, self).__init__(*args, **kwargs)
-    
-    def __call__(self, supervisor, msg):
-        if msg == 'quit_on_demand':
-            supervisor.simulationQuit(0)
-    
-    def messages(self):
-        return ['quit_on_demand']
-    
-    def __str__(self):
-        return "QuitOnDemand"
 
 def event_handler_template(robot, epoch, current_time, msg):
     """Template function for event_handler function of
