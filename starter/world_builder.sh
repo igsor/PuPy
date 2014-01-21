@@ -15,13 +15,14 @@ OPTIONS:
    -p      Puppy
    -f      Overwrite target
    -b      Directory of your webots data
-   -m      starting mode of webots: stop, realtime (default), run or fast
+   -m      starting mode of webots: pause (=stop in older versions), realtime (default), run or fast
+   -a      additional arguments to webots (must be enclosed in "" or '')
    -h      Show this message
 EOF
 }
 
 WEBOTS="/usr/local/bin/webots"
-BASE="$(dirname "$(readlink "${BASH_SOURCE[0]}")")/data"
+BASE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/data"
 
 TRG=
 
@@ -30,8 +31,9 @@ SCTRL=
 WORLD="default"
 PUPPY="default"
 SUPERVISOR="default"
-MODE="stop"
-while getopts “hp:s:t:c:b:m:” OPTION
+MODE="realtime"
+ARGS=
+while getopts “hp:s:t:c:b:m:a:” OPTION
 do
      case $OPTION in
          h)
@@ -55,6 +57,9 @@ do
              ;;
          m)
              MODE=$OPTARG
+             ;;
+         a)
+             ARGS=$OPTARG
              ;;
          ?)
              usage
@@ -100,9 +105,9 @@ if [[ ! -e $BASE/puppy/$PUPPY ]]; then echo "PUPPY not found"; exit 1; fi
 if [[ ! -e $BASE/supervisor/$SUPERVISOR ]]; then echo "SUPERVISOR not found"; exit 1; fi
 
 # check mode argument
-if [[ ! $MODE == "stop" ]] && [[ ! $MODE == "realtime" ]] && [[ ! $MODE == "run" ]] && [[ ! $MODE == "fast" ]]
+if [[ ! $MODE == "stop" ]] && [[ ! $MODE == "pause" ]] && [[ ! $MODE == "realtime" ]] && [[ ! $MODE == "run" ]] && [[ ! $MODE == "fast" ]]
 then
-    echo "The webots run mode is $MODE, but must be one of (stop, realtime, run, fast)."
+    echo "The webots run mode is $MODE, but must be one of (stop/pause, realtime, run, fast)."
     exit 1
 fi
 
@@ -135,4 +140,4 @@ cat $BASE/controllers/generic/generic.py | sed "s|^CMD=''|CMD='$SPTH'|" > $TRG/c
 
 # start webots
 cd $TRG
-$WEBOTS --mode=$MODE worlds/puppy_world.wbt
+$WEBOTS --mode=$MODE $ARGS worlds/puppy_world.wbt

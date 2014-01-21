@@ -7,6 +7,7 @@ import numpy as np
 import json
 import PuPy
 import os
+import warnings
 
 def load_gaits(filename=PuPy.__file__[:-17]+'data'+os.sep+'puppy_gaits.json', names=None):
     """
@@ -26,6 +27,7 @@ def load_gaits(filename=PuPy.__file__[:-17]+'data'+os.sep+'puppy_gaits.json', na
     else:
         gaits = dict([(name, Gait(gaits[name], name)) for name in gaits])          
     return gaits
+
 
 class Gait(object):
     """Motor target generator, using predefined gait_switcher.
@@ -67,6 +69,14 @@ class Gait(object):
     
     def __str__(self):
         return self.name
+
+
+class NoneChild(object):
+    """Dummy class for actor's child."""
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        return None
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return None
 
 class RobotActor(object):
     """Template class for an actor, used in :py:class:`WebotsPuppyMixin`.
@@ -115,48 +125,81 @@ class RobotActor(object):
     
         >>> iter(myList)
     
+    ``child``
+        Every :py:class:`RobotActor` has a ``child`` member, which can be
+        another :py:class:`RobotActor`. The ``child`` is called in the end
+        of the __call__() method,
+        e.g. return self.child(epoch, time_start_ms, time_end_ms, step_size_ms).
+            
     """
-    def __init__(self):
-        self.child = None
+    def __init__(self, child=None):
+        self.child = child
+        if self.child is None:
+            self.child = NoneChild()
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         raise NotImplementedError()
     
-    def get(self, name):
-        if hasattr(self, name):
-            return getattr(self, name)
+    def get_from_child(self, name, default=None):
+        """return member ``name`` from first child class in the hierarchy that has this member."""
+        if hasattr(self.child, name):
+            return getattr(self.child, name)
+        elif hasattr(self.child, 'get_from_child'):
+            return self.child.get_from_child(name)
         else:
-            if self.child is None:
-                return None
-            else:
-                return self.child.get(name)
+            return default
+            
+    def signal(self, msg, **kwargs):
+        """broadcast signal message ``msg`` to all child classes."""
+        if hasattr(self.child, 'signal'):
+            self.child.signal(msg, **kwargs)
+        self._signal(msg, **kwargs)
+    
+    def _signal(self, msg, **kwargs):
+        """Template method for subclasses. Overload this method to enable signal receiving."""
+        pass
+    
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        """Template method for subclasses. Use this to return a motor targets-iterator at time 0."""
+#        return self.child._get_initial_targets(time_start_ms, time_end_ms, step_size_ms)
+        return self.get_from_child('_get_initial_targets', lambda a,b,c:None)(time_start_ms, time_end_ms, step_size_ms)
+        
 
 class PuppyActor(RobotActor):
     """Deprecated alias for :py:class:`RobotActor`."""
     pass
 
-class RandomGaitControl(PuppyActor):
+
+class RandomGaitControl(RobotActor):
     """From a list of available gaits, randomly select one."""
     def __init__(self, gaits):
         super(RandomGaitControl, self).__init__()
         self.gaits = gaits[:]
         self.gait = None
     
-    def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         self.gait = random.choice(self.gaits)
         print self.gait
-        return self.gait.iter(time_start_ms, step_size)
+        return self.gait.iter(time_start_ms, step_size_ms)
+    
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
-class ConstantGaitControl(PuppyActor):
+
+class ConstantGaitControl(RobotActor):
     """Given a gait, always apply it."""
     def __init__(self, gait):
         super(ConstantGaitControl, self).__init__()
         self.gait = gait
     
-    def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
-        return self.gait.iter(time_start_ms, step_size)
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        return self.gait.iter(time_start_ms, step_size_ms)
+    
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
-class SequentialGaitControl(PuppyActor):
+
+class SequentialGaitControl(RobotActor):
     """Execute a predefined sequence of gaits.
     
     Note that it's assumed that *gait_iter* does not terminate
@@ -167,11 +210,15 @@ class SequentialGaitControl(PuppyActor):
         self.gait_iter = gait_iter
         self.gait = None
     
-    def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         self.gait = self.gait_iter.next()
-        return self.gait.iter(time_start_ms, step_size)
+        return self.gait.iter(time_start_ms, step_size_ms)
+    
+    def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
+        return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
-class _PuppyCollector_h5py(RobotActor):
+
+class _RobotCollector_h5py(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the h5py module.
     
@@ -194,24 +241,24 @@ class _PuppyCollector_h5py(RobotActor):
         A *dict* is expected. Default is None (no headers).
     
     """
-    def __init__(self, child, expfile, headers=None):
-        # set child
-        super(_PuppyCollector_h5py, self).__init__()
-        self.child = child
-        if child is None:
-            self.child = lambda epo, start, end, step: None
+    def __init__(self, child, expfile, headers=None, vars=None):
+        super(_RobotCollector_h5py, self).__init__(child)
+        
+        self.headers = headers
+        self.vars = vars
         
         # create experiment storage
         import h5py
         self.fh = h5py.File(expfile,'a')
-        self.grp_name = str(len(self.fh.keys()))
-        self.grp = self.fh.create_group(self.grp_name)
-        amngr = h5py.AttributeManager(self.grp)
-        amngr.create('time', time.ctime())
-        if headers is not None:
-            for k in headers:
-                amngr.create(k, headers[k])
+        self._create_group(str(len(self.fh.keys())))
         
+    def _create_group(self, grp_name):
+        self.grp_name = grp_name
+        self.grp = self.fh.create_group(self.grp_name)
+        self.set_header('time', time.ctime())
+        if self.headers is not None:
+            for k in self.headers:
+                self.set_header(k, self.headers[k])
         print "Using storage", self.grp_name
     
     def set_header(self, name, data):
@@ -231,9 +278,17 @@ class _PuppyCollector_h5py(RobotActor):
     # if RevertTumbling is used:
     #  last epoch will not be written since it is not necessarily complete;
     #  grace time deals with this (> one epoch)
-    def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         # write epoch to dataset
-        for k in epoch:
+        keys = epoch.keys()
+        if self.vars is None:
+            vars = keys
+        else:
+            vars = self.vars
+        for k in vars:
+            if k not in keys:
+                warnings.warn('logging of %s requested but not present in epoch. skipping...'%k)
+                continue
             if k not in self.grp:
                 maxshape = tuple([None] * len(epoch[k].shape))
                 self.grp.create_dataset(k, data=epoch[k], chunks=True, maxshape=maxshape)
@@ -244,9 +299,17 @@ class _PuppyCollector_h5py(RobotActor):
                 self.grp[k][K:] = epoch[k]
         
         self.fh.flush()
-        return self.child(epoch, time_start_ms, time_end_ms, step_size)
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _signal(self, msg, **kwargs):
+        super(_RobotCollector_h5py, self)._signal(msg, **kwargs)
+        if isinstance(msg, str) and msg=='new_episode':
+            # start a new episode, i.e. create a new group in expfile
+            # and store all new epochs there:
+            self._create_group(str(int(self.grp_name)+1))
 
-class _PuppyCollector_pytables(RobotActor):
+
+class _RobotCollector_pytables(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the PyTables module.
     
@@ -270,11 +333,7 @@ class _PuppyCollector_pytables(RobotActor):
     
     """
     def __init__(self, child, expfile, headers=None):
-        # set child
-        super(_PuppyCollector_pytables, self).__init__()
-        self.child = child
-        if child is None:
-            self.child = lambda epo, start, end, step: None
+        super(_RobotCollector_pytables, self).__init__(child)
         
         # create experiment storage
         import tables
@@ -302,7 +361,7 @@ class _PuppyCollector_pytables(RobotActor):
     # if RevertTumbling is used:
     #  last epoch will not be written since it is not necessarily complete;
     #  grace time deals with this (> one epoch)
-    def __call__(self, epoch, time_start_ms, time_end_ms, step_size):
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         # write epoch to dataset
         for k in epoch:
             if k not in self.grp:
@@ -311,9 +370,17 @@ class _PuppyCollector_pytables(RobotActor):
                 self.grp._v_children[k].append(epoch[k])
         
         self.fh.flush()
-        return self.child(epoch, time_start_ms, time_end_ms, step_size)
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _signal(self, msg, **kwargs):
+        super(_RobotCollector_pytables, self)._signal(msg, **kwargs)
+        if isinstance(msg, str) and msg=='new_episode':
+            # start a new episode, i.e. create a new group in expfile
+            # and store all new epochs there:
+            warnings.warn("starting new episode not yet implemented in ``_RobotCollector_pytables``.")
 
-class RobotCollector(_PuppyCollector_h5py):
+
+class RobotCollector(_RobotCollector_h5py):
     """Collect sensor readouts and store them in a file.
     
     The data is stored in the [HDF5]_ format. For each simulation run,
@@ -341,16 +408,16 @@ class RobotCollector(_PuppyCollector_h5py):
     """
     pass
 
+
 class PuppyCollector(RobotCollector):
     """Deprecated alias for :py:class:`RobotCollector`."""
     pass
 
 
-class GaitNameCollector(PuppyActor):
+class GaitNameCollector(RobotActor):
     """A collector that records the name of the current gait."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, gait_names=None, **kwargs):
-        super(GaitNameCollector, self).__init__(**kwargs)
-        self.child = child
+        super(GaitNameCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         if gait_names is not None:
@@ -360,20 +427,19 @@ class GaitNameCollector(PuppyActor):
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            gait_name = self.get('gait').name
+            gait_name = self.get_from_child('gait').name
             epoch['gait'] = np.repeat(np.array(gait_name, dtype='|S'+str(self.max_name_len)), self.ctrl_period_ms/self.sampling_period_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
 
-class GaitIndexCollector(PuppyActor):
+class GaitIndexCollector(RobotActor):
     """
     A collector that records the index of the current gait.
     The mapping between indices and names of the gaits is stored in a dictionary in the
     header of the log file (requires a collector with method 'set_header(name, data)').
     """
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, gait_names=None, **kwargs):
-        super(GaitIndexCollector, self).__init__(**kwargs)
-        self.child = child
+        super(GaitIndexCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         if gait_names is None:
@@ -383,13 +449,13 @@ class GaitIndexCollector(PuppyActor):
             self._set_header(self.gait_names)
             
     def _set_header(self, gait_names):
-        set_header = self.get('set_header')
+        set_header = self.get_from_child('set_header')
         if set_header is not None:
             set_header('gait_names', np.array(gait_names))
         
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            gait_name = self.get('gait').name
+            gait_name = self.get_from_child('gait').name
             if gait_name not in self.gait_names:
                 self.gait_names.append(gait_name)
                 self._set_header(self.gait_names)
@@ -398,17 +464,16 @@ class GaitIndexCollector(PuppyActor):
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
 
-class GaitParametersCollector(PuppyActor):
+class GaitParametersCollector(RobotActor):
     """A collector that records the motor parameters."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, **kwargs):
-        super(GaitParametersCollector, self).__init__(**kwargs)
-        self.child = child
+        super(GaitParametersCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            current_params = self.get('gait').params
+            current_params = self.get_from_child('gait').params
             epoch['frequency_FL'] = np.repeat([current_params['frequency'][0]], self.ctrl_period_ms/self.sampling_period_ms)
             epoch['frequency_FR'] = np.repeat([current_params['frequency'][1]], self.ctrl_period_ms/self.sampling_period_ms)
             epoch['frequency_HL'] = np.repeat([current_params['frequency'][2]], self.ctrl_period_ms/self.sampling_period_ms)
@@ -427,15 +492,15 @@ class GaitParametersCollector(PuppyActor):
             epoch['phase_HR'] = np.repeat([current_params['phase'][3]], self.ctrl_period_ms/self.sampling_period_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
-class TumbleCollector(PuppyActor):
+
+class TumbleCollector(RobotActor):
     """A collector that records when Puppy tumbles."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, **kwargs):
-        super(TumbleCollector, self).__init__(**kwargs)
-        self.child = child
+        super(TumbleCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
-        self.event_handler = self._get_event_handler()
+        self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
@@ -443,21 +508,21 @@ class TumbleCollector(PuppyActor):
             self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _get_event_handler(self):
-        def func(robot, epoch, current_time, msg):
-            if msg=='tumbled':
-                self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
-        return func
+    def _signal(self, msg, **kwargs):
+        super(TumbleCollector, self)._signal(msg, **kwargs)
+        if msg=='tumbled':
+            current_time = kwargs['current_time']
+            self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
 
-class ResetCollector(PuppyActor):
+
+class ResetCollector(RobotActor):
     """A collector that records when Puppy was reset (respawned)."""
     def __init__(self, child, sampling_period_ms, ctrl_period_ms, **kwargs):
-        super(ResetCollector, self).__init__(**kwargs)
-        self.child = child
+        super(ResetCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
         self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
-        self.event_handler = self._get_event_handler()
+        self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
@@ -465,8 +530,70 @@ class ResetCollector(PuppyActor):
             self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
     
-    def _get_event_handler(self):
-        def func(robot, epoch, current_time, msg):
-            if msg=='reset':
-                self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
-        return func
+    def _signal(self, msg, **kwargs):
+        super(ResetCollector, self)._signal(msg, **kwargs)
+        if msg=='reset':
+            current_time = kwargs['current_time']
+            self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
+
+
+class OnlinePrinter(RobotActor):
+    """An actor that prints out desired variables from the epoch."""
+    def __init__(self, child, var_list=[], separator=', ', **kwargs):
+        RobotActor.__init__(self, child, **kwargs)
+        self.var_list = var_list
+        self.separator = separator
+        import sys
+        self.sys = sys
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        s = ''
+        for v in self.var_list:
+            x = lambda a:a
+            if isinstance(v, list) and callable(v[1]):
+                x = v[1]
+                v = v[0]
+            else:
+                x = lambda a:a
+            if not v in epoch:
+                warnings.warn('variable "%s" not in epoch. skipping...'%v)
+                continue
+            s += v + ': ' + str( x(epoch[v]) )
+            s += self.separator
+        if len(self.separator)>0:
+            s = s[:-len(self.separator)]
+        if len(s)>0:
+            print s
+            self.sys.stdout.flush()
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+        
+
+
+class OnnlinePlotter(RobotActor):
+    """An actor that plots data while the robot is running."""
+    def __init__(self, child, var_list=[], **kwargs):
+        super(OnnlinePlotter, self).__init__(child, **kwargs)
+        self.var_list = var_list
+        import pylab as pl
+        pl.ion()
+        self.pl = pl
+        self.fig, self.ax = pl.subplots(len(var_list), 1, True)
+        self.line = []
+        for i,v in enumerate(self.var_list):
+            self.ax[i].set_ylabel(v)
+            self.line.append(self.ax[i].plot([],[])[0])
+        self.ax[-1].set_xlabel('time')        
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        for i,v in enumerate(self.var_list):
+            dat = epoch[v]
+            self.line[i].set_xdata(np.append(self.line[i].get_xdata(), time_start_ms))
+            self.line[i].set_ydata(np.append(self.line[i].get_ydata(), dat))
+        self.pl.draw()
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _signal(self, msg, **kwargs):
+        super(ResetCollector, self)._signal(msg, **kwargs)
+        if msg=='reset':
+            for ax in self.ax:
+                ax.cla()
