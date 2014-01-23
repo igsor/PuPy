@@ -140,8 +140,15 @@ class RobotActor(object):
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         raise NotImplementedError()
     
+    def __getattr__(self, name):
+        """if a ``self`` does not have member ``name``, try to get it from child."""
+        if name is 'child': # prevent infinite recursion when looking up non-existing child
+            raise AttributeError()
+        return getattr(self.child, name)
+    
     def get_from_child(self, name, default=None):
-        """return member ``name`` from first child class in the hierarchy that has this member."""
+        """DEPRICATED. Try to use normal method getattr (x.name)!
+        Return member ``name`` from first child class in the hierarchy that has this member."""
         if hasattr(self.child, name):
             return getattr(self.child, name)
         elif hasattr(self.child, 'get_from_child'):
@@ -161,8 +168,9 @@ class RobotActor(object):
     
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         """Template method for subclasses. Use this to return a motor targets-iterator at time 0."""
-#        return self.child._get_initial_targets(time_start_ms, time_end_ms, step_size_ms)
-        return self.get_from_child('_get_initial_targets', lambda a,b,c:None)(time_start_ms, time_end_ms, step_size_ms)
+        if hasattr(self.child, '_get_initial_targets'):
+            return self.child._get_initial_targets(time_start_ms, time_end_ms, step_size_ms)
+        return None
         
 
 class PuppyActor(RobotActor):
@@ -427,7 +435,7 @@ class GaitNameCollector(RobotActor):
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            gait_name = self.get_from_child('gait').name
+            gait_name = self.gait.name
             epoch['gait'] = np.repeat(np.array(gait_name, dtype='|S'+str(self.max_name_len)), self.ctrl_period_ms/self.sampling_period_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
@@ -449,13 +457,12 @@ class GaitIndexCollector(RobotActor):
             self._set_header(self.gait_names)
             
     def _set_header(self, gait_names):
-        set_header = self.get_from_child('set_header')
-        if set_header is not None:
-            set_header('gait_names', np.array(gait_names))
+        if hasattr(self, 'set_header'):
+            self.set_header('gait_names', np.array(gait_names))
         
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            gait_name = self.get_from_child('gait').name
+            gait_name = self.gait.name
             if gait_name not in self.gait_names:
                 self.gait_names.append(gait_name)
                 self._set_header(self.gait_names)
@@ -473,7 +480,7 @@ class GaitParametersCollector(RobotActor):
     
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
-            current_params = self.get_from_child('gait').params
+            current_params = self.gait.params
             epoch['frequency_FL'] = np.repeat([current_params['frequency'][0]], self.ctrl_period_ms/self.sampling_period_ms)
             epoch['frequency_FR'] = np.repeat([current_params['frequency'][1]], self.ctrl_period_ms/self.sampling_period_ms)
             epoch['frequency_HL'] = np.repeat([current_params['frequency'][2]], self.ctrl_period_ms/self.sampling_period_ms)
