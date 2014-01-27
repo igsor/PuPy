@@ -4,6 +4,7 @@
 doc/build/
 dist/
 MANIFEST
+PuPy.pth
 
 /.project
 /.pydevproject
