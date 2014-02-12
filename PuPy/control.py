@@ -249,11 +249,12 @@ class _RobotCollector_h5py(RobotActor):
         A *dict* is expected. Default is None (no headers).
     
     """
-    def __init__(self, child, expfile, headers=None, vars=None):
+    def __init__(self, child, expfile, headers=None, vars=None, warn=True):
         super(_RobotCollector_h5py, self).__init__(child)
         
         self.headers = headers
         self.vars = vars
+        self.warn = warn
         
         # create experiment storage
         import h5py
@@ -295,7 +296,8 @@ class _RobotCollector_h5py(RobotActor):
             vars = self.vars
         for k in vars:
             if k not in keys:
-                warnings.warn('logging of %s requested but not present in epoch. skipping...'%k)
+                if self.warn:
+                    warnings.warn('logging of %s requested but not present in epoch. skipping...'%k)
                 continue
             if k not in self.grp:
                 maxshape = tuple([None] * len(epoch[k].shape))

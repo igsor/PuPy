@@ -202,18 +202,18 @@ class WebotsRobotMixin(object):
         self._post_run_hook(current_time)
         return self
     
-    def send_msg(self, msg, emittor_name=None):
-        """Send a message ``msg`` through a device ``emittor_name``. If
-        the ``emittor_name`` is :py:const:`None`, the message will
+    def send_msg(self, msg, emitter_name=None):
+        """Send a message ``msg`` through a device ``emitter_name``. If
+        the ``emitter_name`` is :py:const:`None`, the message will
         be sent through all available devices."""
-        if emittor_name is None:
-            for emittor in self._emitters.values():
-                emittor.send(msg)
+        if emitter_name is None:
+            for emitter in self._emitters.values():
+                emitter.send(msg)
         else:
-            self._emitters[emittor_name].send(msg)
+            self._emitters[emitter_name].send(msg)
     
     def add_emitter(self, name):
-        """Add an emittor called ``name``."""
+        """Add an emitter called ``name``."""
         if name in self._emitters:
             return
         
@@ -249,12 +249,12 @@ class WebotsRobotMixin(object):
             for k in self.observer_noise: # len(obs_noise) <= len(epoch)
                 if k in epoch and k not in motor_names:
                     epoch[k] += np.random.normal(scale=self.observer_noise[k], size=epoch[k].shape)
-                else:
-                    # scalar case, same noise for all sensors
-                    for k in epoch:
-                        if k in motor_names:
-                            continue
-                        epoch[k] += np.random.normal(scale=self.observer_noise, size=epoch[k].shape)
+        else:
+            # scalar case, same noise for all sensors
+            for k in epoch:
+                if k in motor_names:
+                    continue
+                epoch[k] += np.random.normal(scale=self.observer_noise, size=epoch[k].shape)
         return epoch
     
     def _add_motor_noise(self, current_target):
