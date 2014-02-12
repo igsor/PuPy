@@ -12,50 +12,50 @@ import warnings
 def load_gaits(filename=PuPy.__file__[:-17]+'data'+os.sep+'puppy_gaits.json', names=None):
     """
     Returns the gaits stored in the given json file.
-    
+
     ``filename``
         string containing the name of the json file where the gaits are stored
         (default is PuPy/data/puppy_gaits.json).
-    
+
     ``names``
          If the gait names are given as a list of strings, only the desired gaits are returned as a list.
-         Otherwise a dictionary containing all gaits are returned. 
+         Otherwise a dictionary containing all gaits are returned.
     """
     gaits = json.load(open(filename, 'r'))
     if names is not None:
         gaits = [Gait(gaits[name], name) for name in names]
     else:
-        gaits = dict([(name, Gait(gaits[name], name)) for name in gaits])          
+        gaits = dict([(name, Gait(gaits[name], name)) for name in gaits])
     return gaits
 
 
 class Gait(object):
     """Motor target generator, using predefined gait_switcher.
-    
+
     The motor signal follows the parametrised sine
-    
+
         :math:`A  \sin(2 \pi f x + p) + B`
-    
+
     with the parameters A, f, p, B
-    
+
     ``params``
         :py:meth:`dict` holding the parameters:
-        
+
          keys:   amplitude, frequency, phase, offset
-         
+
          values: 4-tuples holding the parameter values. The order is
                  front-left, front-right, rear-left, rear-right
-    
+
     """
     def __init__(self, params, name=None):
         self.params = params
         if name is None:
             name = 'Unknown gait'
         self.name = name
-    
+
     def __iter__(self):
         return self.iter(0, 20)
-    
+
     def iter(self, time_start_ms, step):
         """Return the motor target sequence in the interval [*time_start_ms*, *time_end_ms*]."""
         params = zip(self.params['amplitude'], self.params['frequency'], self.params['phase'], self.params['offset'])
@@ -63,10 +63,10 @@ class Gait(object):
         while True:
             current_time_ms += step
             yield [A * sin(2.0 * pi * (freq * current_time_ms / 1e3 - phase)) + offset for A, freq, phase, offset in params]
-    
+
     def copy(self):
         return Gait(self.params.copy(), self.name)
-    
+
     def __str__(self):
         return self.name
 
@@ -80,72 +80,72 @@ class NoneChild(object):
 
 class RobotActor(object):
     """Template class for an actor, used in :py:class:`WebotsPuppyMixin`.
-    
+
     The actor is called after every control period, when a new sequence
     of motor targets is required. It is expected to return an iterator
     which in every step produces a 4-tuple, representing the targets
     of the motors.
     The order is front-left, front-right, rear-left, rear-right.
-    
+
     ``epoch``
         The sensor measurements in the previous control period. They
         are returned as dict, with the sensor name as key and a
         numpy array of observations as value.
-        
+
         Note that the motor targets are the ones that have been applied,
         i.e. those that lead up to the sensor measurements. Imagine this
         cycle::
-        
+
             trg[i] -> move robot -> sensors[i] -> trg[i+1] -> ...
-        
+
         Further, note that the :py:meth:`dict` may be empty (this is
         guaranteed at least once in the simulator initialization).
-    
+
     ``time_start_ms``
         The (simulated) time from which on the motor target will be
         applied. *time_start_ms* is weakly positive and strictly
         monotonic increasing (meaning that it is zero only in the very
         first call).
-    
+
     ``time_end_ms``
         The (simulated) time up to which the motor target must at least
         be defined.
-    
+
     ``step_size_ms``
         The motor period, i.e. the number of milliseconds pass until
         the next motor target is applied.
-    
+
     If the targets are represented by a list, it must at least have
-    
+
         .. :math:`\\frac{ \\text{time_end_ms} - \\text{time_start_ms} }{ \\text{step_size_ms} }`
-    
+
         (*time_end_ms* - *time_start_ms*) / *step_size_ms*
-    
+
     items and it has to be returned as iterator, as in
-    
+
         >>> iter(myList)
-    
+
     ``child``
         Every :py:class:`RobotActor` has a ``child`` member, which can be
         another :py:class:`RobotActor`. The ``child`` is called in the end
         of the __call__() method,
         e.g. return self.child(epoch, time_start_ms, time_end_ms, step_size_ms).
-            
+
     """
     def __init__(self, child=None):
         self.child = child
         if self.child is None:
             self.child = NoneChild()
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         raise NotImplementedError()
-    
+
     def __getattr__(self, name):
         """if a ``self`` does not have member ``name``, try to get it from child."""
         if name is 'child': # prevent infinite recursion when looking up non-existing child
             raise AttributeError()
         return getattr(self.child, name)
-    
+
     def get_from_child(self, name, default=None):
         """DEPRICATED. Try to use normal method getattr (x.name)!
         Return member ``name`` from first child class in the hierarchy that has this member."""
@@ -155,23 +155,23 @@ class RobotActor(object):
             return self.child.get_from_child(name)
         else:
             return default
-            
+
     def signal(self, msg, **kwargs):
         """broadcast signal message ``msg`` to all child classes."""
         if hasattr(self.child, 'signal'):
             self.child.signal(msg, **kwargs)
         self._signal(msg, **kwargs)
-    
+
     def _signal(self, msg, **kwargs):
         """Template method for subclasses. Overload this method to enable signal receiving."""
         pass
-    
+
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         """Template method for subclasses. Use this to return a motor targets-iterator at time 0."""
         if hasattr(self.child, '_get_initial_targets'):
             return self.child._get_initial_targets(time_start_ms, time_end_ms, step_size_ms)
         return None
-        
+
 
 class PuppyActor(RobotActor):
     """Deprecated alias for :py:class:`RobotActor`."""
@@ -184,12 +184,12 @@ class RandomGaitControl(RobotActor):
         super(RandomGaitControl, self).__init__()
         self.gaits = gaits[:]
         self.gait = None
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         self.gait = random.choice(self.gaits)
         print self.gait
         return self.gait.iter(time_start_ms, step_size_ms)
-    
+
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
@@ -199,17 +199,17 @@ class ConstantGaitControl(RobotActor):
     def __init__(self, gait):
         super(ConstantGaitControl, self).__init__()
         self.gait = gait
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         return self.gait.iter(time_start_ms, step_size_ms)
-    
+
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
 
 class SequentialGaitControl(RobotActor):
     """Execute a predefined sequence of gaits.
-    
+
     Note that it's assumed that *gait_iter* does not terminate
     permaturely.
     """
@@ -217,11 +217,11 @@ class SequentialGaitControl(RobotActor):
         super(SequentialGaitControl, self).__init__()
         self.gait_iter = gait_iter
         self.gait = None
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         self.gait = self.gait_iter.next()
         return self.gait.iter(time_start_ms, step_size_ms)
-    
+
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
         return self.__call__(None, time_start_ms, time_end_ms, step_size_ms)
 
@@ -229,29 +229,29 @@ class SequentialGaitControl(RobotActor):
 class _RobotCollector_h5py(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the h5py module.
-    
+
     The data is stored in the [HDF5]_ format. For each simulation run,
     there's a group, identified by a running number. Within each group,
     the sensor data is stored in exclusive datasets, placed under the
     sensor's name.
-    
+
     ``child``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``child``-actor
         is required. It must match the :py:class:`RobotActor` interface.
-    
+
     ``expfile``
         Path to the file into which the experimental data should be
         stored.
-    
+
     ``headers``
         Additional headers, stored with the current experiment.
         A *dict* is expected. Default is None (no headers).
-    
+
     """
     def __init__(self, child, expfile, headers=None, vars=None, warn=True):
         super(_RobotCollector_h5py, self).__init__(child)
-        
+
         self.headers = headers
         self.vars = vars
         self.warn = warn
@@ -260,7 +260,7 @@ class _RobotCollector_h5py(RobotActor):
         import h5py
         self.fh = h5py.File(expfile,'a')
         self._create_group(str(len(self.fh.keys())))
-        
+
     def _create_group(self, grp_name):
         self.grp_name = grp_name
         self.grp = self.fh.create_group(self.grp_name)
@@ -269,7 +269,7 @@ class _RobotCollector_h5py(RobotActor):
             for k in self.headers:
                 self.set_header(k, self.headers[k])
         print "Using storage", self.grp_name
-    
+
     def set_header(self, name, data):
         """Add custom header ``data`` to the current group. The data is
         stored under key ``name``. If the key is already in use, the
@@ -280,10 +280,10 @@ class _RobotCollector_h5py(RobotActor):
         if name in amngr:
             del amngr[name]
         amngr.create(name, data)
-    
+
     def __del__(self):
         self.fh.close()
-    
+
     # if RevertTumbling is used:
     #  last epoch will not be written since it is not necessarily complete;
     #  grace time deals with this (> one epoch)
@@ -307,10 +307,10 @@ class _RobotCollector_h5py(RobotActor):
                 K = self.grp[k].shape[0]
                 self.grp[k].resize(size=N+K, axis=0)
                 self.grp[k][K:] = epoch[k]
-        
+
         self.fh.flush()
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-    
+
     def _signal(self, msg, **kwargs):
         super(_RobotCollector_h5py, self)._signal(msg, **kwargs)
         if isinstance(msg, str) and msg=='new_episode':
@@ -322,52 +322,52 @@ class _RobotCollector_h5py(RobotActor):
 class _RobotCollector_pytables(RobotActor):
     """Collect sensor readouts and store them in a file.
     HDF5 is written through the PyTables module.
-    
+
     The data is stored in the [HDF5]_ format. For each simulation run,
     there's a group, identified by a running number. Within each group,
     the sensor data is stored in exclusive datasets, placed under the
     sensor's name.
-    
+
     ``child``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``child``-actor
         is required. It must match the :py:class:`RobotActor` interface.
-    
+
     ``expfile``
         Path to the file into which the experimental data should be
         stored.
-    
+
     ``headers``
         Additional headers, stored with the current experiment.
         A *dict* is expected. Default is None (no headers).
-    
+
     """
     def __init__(self, child, expfile, headers=None):
         super(_RobotCollector_pytables, self).__init__(child)
-        
+
         # create experiment storage
         import tables
         self.fh = tables.File(expfile,'a')
         name = 'exp' + str(len(self.fh.root._v_groups))
         self.grp = self.fh.create_group(self.fh.root, name)
-        
+
         self.grp._f_setattr('time', time.time())
         if headers is not None:
             for k in headers:
                 self.grp._f_setattr(k, headers[k])
-        
+
         print "Using storage", name
-    
+
     def __del__(self):
         self.fh.close()
-    
+
     def set_header(self, name, data):
         """Add custom header ``data`` to the current group. The data is
         stored under key ``name``. If the key is already in use, the
         value will be overwritten.
         """
         self.grp._f_setattr(name, data)
-    
+
     # if RevertTumbling is used:
     #  last epoch will not be written since it is not necessarily complete;
     #  grace time deals with this (> one epoch)
@@ -378,10 +378,10 @@ class _RobotCollector_pytables(RobotActor):
                 self.fh.create_earray(self.grp, k, chunkshape=epoch[k].shape, obj=epoch[k])
             else:
                 self.grp._v_children[k].append(epoch[k])
-        
+
         self.fh.flush()
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-    
+
     def _signal(self, msg, **kwargs):
         super(_RobotCollector_pytables, self)._signal(msg, **kwargs)
         if isinstance(msg, str) and msg=='new_episode':
@@ -392,26 +392,26 @@ class _RobotCollector_pytables(RobotActor):
 
 class RobotCollector(_RobotCollector_h5py):
     """Collect sensor readouts and store them in a file.
-    
+
     The data is stored in the [HDF5]_ format. For each simulation run,
     there's a group, identified by a running number. Within each group,
     the sensor data is stored in exclusive datasets, placed under the
     sensor's name.
-    
+
     .. note::
         This class abstracts interface from implementation. Internally,
         either the HDF5 interface from [PyTables]_ or [h5py]_ may be
         used.
-    
+
     ``child``
         The :py:class:`PuppyCollector` works as intermediate actor, it
         does not implement a policy itself. For this, another ``child``-actor
         is required. It must match the :py:class:`RobotActor` interface.
-    
+
     ``expfile``
         Path to the file into which the experimental data should be
         stored.
-    
+
     ``headers``
         Additional headers, stored with the current experiment.
         A *dict* is expected. Default is None (no headers).
@@ -434,7 +434,7 @@ class GaitNameCollector(RobotActor):
             self.max_name_len = max([len(gait) for gait in gait_names])
         else:
             self.max_name_len = 20
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             gait_name = self.gait.name
@@ -457,18 +457,18 @@ class GaitIndexCollector(RobotActor):
         else:
             self.gait_names = gait_names
             self._set_header(self.gait_names)
-            
+
     def _set_header(self, gait_names):
         if hasattr(self, 'set_header'):
             self.set_header('gait_names', np.array(gait_names))
-        
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             gait_name = self.gait.name
             if gait_name not in self.gait_names:
                 self.gait_names.append(gait_name)
                 self._set_header(self.gait_names)
-            gait_idx = np.nonzero(np.array(self.gait_names)==gait_name)[0][0]    
+            gait_idx = np.nonzero(np.array(self.gait_names)==gait_name)[0][0]
             epoch['gait_idx'] = np.repeat([gait_idx], self.ctrl_period_ms/self.sampling_period_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
@@ -479,7 +479,7 @@ class GaitParametersCollector(RobotActor):
         super(GaitParametersCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             current_params = self.gait.params
@@ -510,13 +510,13 @@ class TumbleCollector(RobotActor):
         self.ctrl_period_ms = ctrl_period_ms
         self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             epoch['tumble'] = self._tumbled
             self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-    
+
     def _signal(self, msg, **kwargs):
         super(TumbleCollector, self)._signal(msg, **kwargs)
         if msg=='tumbled':
@@ -532,13 +532,13 @@ class ResetCollector(RobotActor):
         self.ctrl_period_ms = ctrl_period_ms
         self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             epoch['reset'] = self._reset
             self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-    
+
     def _signal(self, msg, **kwargs):
         super(ResetCollector, self)._signal(msg, **kwargs)
         if msg=='reset':
@@ -554,7 +554,7 @@ class OnlinePrinter(RobotActor):
         self.separator = separator
         import sys
         self.sys = sys
-    
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         s = ''
         for v in self.var_list:
@@ -575,34 +575,102 @@ class OnlinePrinter(RobotActor):
             print s
             self.sys.stdout.flush()
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-        
 
 
-class OnnlinePlotter(RobotActor):
-    """An actor that plots data while the robot is running."""
-    def __init__(self, child, var_list=[], **kwargs):
-        super(OnnlinePlotter, self).__init__(child, **kwargs)
-        self.var_list = var_list
+#import sys
+#import multiprocessing
+
+class OnlinePlotter(RobotActor):
+    """An actor that plots data while the robot is running.
+
+    .. warning: Highly experimental code, is not properly working!
+
+    Known issues:
+    * Thread is not properly cancelled. This might be because when you press 'Stop' in webots, the thread stops (hence can't be joined). This also interfers with simulation restarting. Hotfix: After termination, use `pkill -f python.*<dir name>.*robot\.py`
+    * Window redrawing is only done in an update, it's not a detached process itself. Hence reactivity is poor and also the window buttons can't be used (change view or save image).
+    * Multiprocessing approach doesn't open a window
+    * First episode is not plotted
+    """
+    def __init__(self, child, var_list, **kwargs):
+        assert len(var_list) > 0
+        super(OnlinePlotter, self).__init__(child, **kwargs)
+
+        import threading
+        import Queue
+        self._thread_cancelled = False
+        #self._thread_queue = multiprocessing.Queue(1)
+        #self._thread_handle = multiprocessing.Process(target=self._plotter_loop, args=(self, var_list,))
+        self._thread_queue = Queue.Queue(1)
+        self._thread_handle = threading.Thread(target=self._plotter_loop, name='plotter_loop', args=(self, var_list,))
+        self._thread_handle.start()
+        while not self._thread_handle.is_alive():
+            pass
+
+    def _plotter_loop(dummy_self, self, var_list):
+        #out = open('/tmp/pout.t', 'w')
+        #out = sys.stdout
+        #out.write('Thread started with args' + str(var_list) + '\n')
+        #out.flush()
         import pylab as pl
+        import Queue
         pl.ion()
-        self.pl = pl
-        self.fig, self.ax = pl.subplots(len(var_list), 1, True)
-        self.line = []
-        for i,v in enumerate(self.var_list):
-            self.ax[i].set_ylabel(v)
-            self.line.append(self.ax[i].plot([],[])[0])
-        self.ax[-1].set_xlabel('time')        
-    
+        fig, ax = pl.subplots(len(var_list), 1, True)
+        if len(var_list) == 1:
+            ax = [ax]
+        line = []
+        for i,v in enumerate(var_list):
+            ax[i].set_ylabel(v)
+            line.append(ax[i].plot([],[])[0])
+        ax[-1].set_xlabel('time')
+
+        while not self._thread_cancelled:
+            try:
+                #out.write('Waiting for data\n')
+                #out.flush()
+                epoch, time_start, time_end, step = self._thread_queue.get(True, 0.25)
+            except Queue.Empty:
+                continue
+            #out.write('Got data, updating plot\n')
+            #out.flush()
+
+            for i,v in enumerate(var_list):
+                dat = epoch[v]
+                timescale = np.arange(time_start, time_end, step)
+                xdata = np.append(line[i].get_xdata(), timescale)
+                ydata = np.append(line[i].get_ydata(), dat)
+                # sliding window
+                # uncomment or set maxlen=len(xdata) for cumulative behaviour
+                maxlen = 300
+                xdata = xdata[-maxlen:]
+                ydata = ydata[-maxlen:]
+                print line[i].get_xdata().shape, line[i].get_ydata().shape, xdata.shape, ydata.shape, dat.shape
+                line[i].set_xdata(xdata)
+                line[i].set_ydata(ydata)
+                ax[i].set_xlim(xmin=xdata.min(), xmax=xdata.max())
+                ax[i].set_ylim(ymin=ydata.min(), ymax=ydata.max())
+            fig.canvas.draw()
+
+            self._thread_queue.task_done()
+
+        # Empty the queue
+        try:
+            while True:
+                self._thread_queue.get(False)
+        except Queue.Empty:
+            pass
+
+    def __del__(self):
+        self.stop_thread()
+
+    def stop_thread(self):
+        self._thread_cancelled = True
+        self._thread_handle.join()
+        self._thread_queue.join()
+
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
-        for i,v in enumerate(self.var_list):
-            dat = epoch[v]
-            self.line[i].set_xdata(np.append(self.line[i].get_xdata(), time_start_ms))
-            self.line[i].set_ydata(np.append(self.line[i].get_ydata(), dat))
-        self.pl.draw()
+        #sys.stdout.write("Called!\n")
+        #sys.stdout.flush()
+        if not self._thread_cancelled:
+            self._thread_queue.put((epoch, time_start_ms, time_end_ms, step_size_ms), True)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
-    
-    def _signal(self, msg, **kwargs):
-        super(ResetCollector, self)._signal(msg, **kwargs)
-        if msg=='reset':
-            for ax in self.ax:
-                ax.cla()
+

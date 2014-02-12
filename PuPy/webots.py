@@ -60,7 +60,7 @@ class WebotsRobotMixin(object):
         the noise (default).
     
     ``noise_obs``
-        Additive zero-mean gaussian noise on the motor targets.
+        Additive zero-mean gaussian noise on the sensor measurements.
         Additional to whatever *webots* does. Either a scalar of dict
         is expected, which represents the noise variances for all of the
         sensors or each individual one, respectively. In the latter
