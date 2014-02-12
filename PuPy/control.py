@@ -289,7 +289,7 @@ class _RobotCollector_h5py(RobotActor):
     #  grace time deals with this (> one epoch)
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         # write epoch to dataset
-        keys = epoch.keys() 
+        keys = epoch.keys()
         if self.vars is None:
             vars = keys
         else:
