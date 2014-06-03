@@ -1,5 +1,6 @@
 """
-
+change log:
+02.06.2014: fuction signal() must be member of actor (it's existence is not checked anymore)
 
 """
 from fractions import gcd
@@ -166,8 +167,7 @@ class WebotsRobotMixin(object):
                     while receiver.getQueueLength() > 0:
                         msg = receiver.getData()
                         # use the RobotActor way of event-handling:
-                        if hasattr(self.actor, "signal") and callable(self.actor.signal):
-                            self.actor.signal(msg, current_time=current_time, epoch=epoch)
+                        self.actor.signal(msg, current_time=current_time, epoch=epoch)
                         
                         # use additional optional event handlers:
                         for handler in self._events[receiver]:

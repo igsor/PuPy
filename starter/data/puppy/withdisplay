@@ -1,0 +1,377 @@
+DEF puppy Robot {
+  translation 0 0.1 0
+  rotation 0 1 0 -1
+  children [
+	DEF DISPLAY Display {
+	  name             "mydisplay"
+	  rotation 1 0 0 3.14
+	  width 256
+	  height 256
+	  windowPosition 0 1
+	}
+    DEF toSupervisor Emitter {
+      name "toSupervisorEmitter"
+      bufferSize 64
+    }
+    DEF fromSupervisor Receiver {
+      name "fromSupervisorReceiver"
+    }
+    Accelerometer {
+      translation 0.02 -0.01 0
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.239216 0.576471 0.25098
+            }
+          }
+          geometry Sphere {
+            radius 0.02
+          }
+        }
+      ]
+    }
+    Gyro {
+      translation 0.02 -0.01 0
+      children [
+        DEF GYRO_SHAPE Shape {
+          appearance DEF GYRO_APPEARANCE Appearance {
+            material Material {
+              diffuseColor 1 0 0
+            }
+          }
+          geometry Sphere {
+            radius 0.02
+          }
+        }
+      ]
+    }
+    GPS {
+      translation 0.02 -0.01 0
+      children [
+        Shape {
+        }
+      ]
+      name "puppyGPS"
+    }
+    Compass {
+      translation 0.02 -0.01 0
+    }
+    DEF IR_SHARP_EMULATOR DistanceSensor {
+      translation 0.105 0.035 0
+      children [
+        DEF EYE_SHAPE Shape {
+          appearance DEF IR_SENSOR_SHAPE Appearance {
+            material Material {
+              diffuseColor 0 0 0
+            }
+          }
+          geometry Box {
+            size 0.005 0.01 0.03
+          }
+        }
+      ]
+      name "distance_sensor"
+      model "SharpGP2D12"
+      lookupTable [
+        0.03 30 0.2
+        0.05 15 0.2
+        0.1 10 0.05
+        0.2 21 0.05
+        0.3 32 0.05
+        0.4 44 0.05
+        0.5 55 0.05
+        0.6 70 0.05
+        0.7 80 0.05
+        0.8 80 0.05
+      ]
+      type "sonar "
+      numberOfRays 5
+      aperture 0.1
+    }
+    DEF BODY_GROUP Group {
+      children [
+        DEF BATERRY_TRANSFORM Transform {
+          translation 0.065 0.0325 0
+          children [
+            DEF BATTERY_SHAPE Shape {
+              appearance ABSplasticAppearance {
+              }
+              geometry Box {
+                size 0.07 0.025 0.07
+              }
+            }
+          ]
+        }
+        bodyShape {
+        }
+        motorTransform {
+          translation 0.08 0 -0.022
+        }
+        motorTransform {
+          translation 0.08 0 0.022
+        }
+        motorTransform {
+          translation -0.08 0 -0.022
+        }
+        motorTransform {
+          translation -0.08 0 0.022
+        }
+      ]
+    }
+    DEF HIP0 Servo {
+      translation 0.07 0 -0.043
+      rotation 0 0 1 0
+      children [
+        DEF FEMUR_FL_TRANSFORM femurFrontTransform {
+        }
+        DEF KNEE0_SERVO Servo {
+          translation 0 -0.05 0
+          rotation 0 0 1 0.87
+          children [
+            DEF TIBIA_FL_TRANSFORM tibiaFrontTransform {
+            }
+            TouchSensor {
+              translation 0.0031 -0.052 0
+              rotation 1 0 0 1.57
+              children [
+                Shape {
+                  geometry DEF FOOT_CYLINDER Cylinder {
+                    height 0.017
+                    radius 0.01
+                  }
+                }
+              ]
+              name "touch0"
+              boundingObject USE FOOT_CYLINDER
+              physics Physics {
+                density -1
+                mass 0.002
+              }
+              type "force"
+              lookupTable [
+                0 0 0
+                5000 5000 0
+              ]
+            }
+          ]
+          name "knee0"
+          boundingObject USE TIBIA_FL_TRANSFORM
+          physics Physics {
+            density -1
+            mass 0.028
+            centerOfMass 0 -0.01 0
+          }
+          maxForce 0
+          springConstant 0.5
+          dampingConstant 0.001
+        }
+      ]
+      name "hip0"
+      boundingObject USE FEMUR_FL_TRANSFORM
+      physics DEF HIP_PHYSICS Physics {
+        density -1
+        mass 0.02
+        centerOfMass 0 -0.025 0
+      }
+      maxVelocity 6.54
+      maxForce 2.16
+    }
+    DEF HIP1 Servo {
+      translation 0.07 0 0.043
+      rotation 0 0 1 0
+      children [
+        DEF FEMUR_FR_TRANSFORM femurFrontTransform {
+        }
+        DEF KNEE1_SERVO Servo {
+          translation 0 -0.05 0
+          rotation 0 0 1 0.87
+          children [
+            DEF TIBIA_FR_TRANSFORM tibiaFrontTransform {
+            }
+            TouchSensor {
+              translation 0.0031 -0.052 0
+              rotation 1 0 0 1.57
+              children [
+                Shape {
+                  geometry USE FOOT_CYLINDER
+                }
+              ]
+              name "touch1"
+              boundingObject USE FOOT_CYLINDER
+              physics Physics {
+                density -1
+                mass 0.002
+              }
+              type "force"
+              lookupTable [
+                0 0 0
+                5000 5000 0
+              ]
+            }
+          ]
+          name "knee1"
+          boundingObject USE TIBIA_FR_TRANSFORM
+          physics Physics {
+            density -1
+            mass 0.028
+            centerOfMass 0 -0.01 0
+          }
+          maxForce 0
+          springConstant 0.5
+          dampingConstant 0.001
+        }
+      ]
+      name "hip1"
+      boundingObject USE FEMUR_FR_TRANSFORM
+      physics DEF HIP_PHYSICS Physics {
+        density -1
+        mass 0.02
+        centerOfMass 0 -0.025 0
+      }
+      maxVelocity 6.54
+      maxForce 2.16
+    }
+    DEF HIP2 Servo {
+      translation -0.07 0 -0.043
+      rotation 0 0 1 0
+      children [
+        DEF FEMUR_HL_TRANSFORM femurHindTransform {
+        }
+        DEF KNEE2_SERVO Servo {
+          translation 0 -0.05 0
+          rotation 0 0 1 0.87
+          children [
+            DEF TIBIA_HL_TRANSFORM tibiaHindTransform {
+            }
+            TouchSensor {
+              translation 0.0031 -0.052 0
+              rotation 1 0 0 1.57
+              children [
+                Shape {
+                  geometry USE FOOT_CYLINDER
+                }
+              ]
+              name "touch2"
+              boundingObject USE FOOT_CYLINDER
+              physics Physics {
+                density -1
+                mass 0.002
+              }
+              type "force"
+              lookupTable [
+                0 0 0
+                5000 5000 0
+              ]
+            }
+          ]
+          name "knee2"
+          boundingObject USE TIBIA_HL_TRANSFORM
+          physics Physics {
+            density -1
+            mass 0.028
+            centerOfMass 0 -0.01 0
+          }
+          maxForce 0
+          springConstant 0.5
+          dampingConstant 0.001
+        }
+      ]
+      name "hip2"
+      boundingObject USE FEMUR_HL_TRANSFORM
+      physics DEF HIP_PHYSICS Physics {
+        density -1
+        mass 0.02
+        centerOfMass 0 -0.025 0
+      }
+      maxVelocity 6.54
+      maxForce 2.16
+    }
+    DEF HIP3 Servo {
+      translation -0.07 0 0.043
+      rotation 0 0 1 0
+      children [
+        DEF FEMUR_HR_TRANSFORM femurHindTransform {
+        }
+        DEF KNEE3_SERVO Servo {
+          translation 0 -0.05 0
+          rotation 0 0 1 0.87
+          children [
+            DEF TIBIA_HR_TRANSFORM tibiaHindTransform {
+            }
+            TouchSensor {
+              translation 0.0031 -0.052 0
+              rotation 1 0 0 1.57
+              children [
+                Shape {
+                  geometry USE FOOT_CYLINDER
+                }
+              ]
+              name "touch3"
+              boundingObject USE FOOT_CYLINDER
+              physics Physics {
+                density -1
+                mass 0.002
+              }
+              type "force"
+              lookupTable [
+                0 0 0
+                5000 5000 0
+              ]
+            }
+          ]
+          name "knee3"
+          boundingObject USE TIBIA_HR_TRANSFORM
+          physics Physics {
+            density -1
+            mass 0.028
+            centerOfMass 0 -0.01 0
+          }
+          maxForce 0
+          springConstant 0.5
+          dampingConstant 0.001
+        }
+      ]
+      name "hip3"
+      boundingObject USE FEMUR_HR_TRANSFORM
+      physics DEF HIP_PHYSICS Physics {
+        density -1
+        mass 0.02
+        centerOfMass 0 -0.025 0
+      }
+      maxVelocity 6.54
+      maxForce 2.16
+    }
+    DEF CAMERA Servo {
+      translation 0.09 0.07 0
+      rotation 0 0 1 0
+      children [
+        Camera {
+          rotation 0 1 0 -1.5709
+          children [
+            DEF CAMERA_SHAPE Shape {
+              appearance USE IR_SENSOR_SHAPE
+              geometry DEF CAMERA_BOX Box {
+                size 0.03 0.03 0.03
+              }
+            }
+          ]
+        }
+      ]
+      boundingObject USE CAMERA_SHAPE
+      physics Physics {
+        density -1
+        mass 0.04
+      }
+      position -0.5236
+    }
+  ]
+  name "puppy"
+  boundingObject USE BODY_GROUP
+  physics Physics {
+    density -1
+    mass 0.56
+    centerOfMass 0.02 -0.01 0
+  }
+  controller "genericController"
+}

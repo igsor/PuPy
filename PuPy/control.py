@@ -1,4 +1,11 @@
 """
+Change log:
+2014-05-06: TerrainCollector is added.
+2014-05-06: Bug fixed in TumbleCollector and ResetCollector (index of epoch was calculated wrongly).
+2014-05-06: load_gaits returns a list of Gait instances also when no names are given.
+2014-05-07: changed the signal chain to start with top-most Actor and propagate down the childs afterwards.
+2014-05-07: included a reset-listening option in _RobotCollector_h5py.
+2014-05-07: _RobotCollector_h5py recognizes dtype of data.
 """
 import random
 from math import sin, pi
@@ -6,6 +13,7 @@ import time
 import numpy as np
 import json
 import PuPy
+from PuPy.terrains import get_terrain_index_from_position, read_terrain_index
 import os
 import warnings
 
@@ -19,13 +27,12 @@ def load_gaits(filename=PuPy.__file__[:-17]+'data'+os.sep+'puppy_gaits.json', na
 
     ``names``
          If the gait names are given as a list of strings, only the desired gaits are returned as a list.
-         Otherwise a dictionary containing all gaits are returned.
+         Otherwise a list containing all gaits are returned.
     """
     gaits = json.load(open(filename, 'r'))
-    if names is not None:
-        gaits = [Gait(gaits[name], name) for name in names]
-    else:
-        gaits = dict([(name, Gait(gaits[name], name)) for name in gaits])
+    if names is None:
+        names = gaits
+    gaits = [Gait(gaits[name], name) for name in names]
     return gaits
 
 
@@ -132,7 +139,8 @@ class RobotActor(object):
         e.g. return self.child(epoch, time_start_ms, time_end_ms, step_size_ms).
 
     """
-    def __init__(self, child=None):
+    def __init__(self, child=None, verbose=False):
+        self.verbose = verbose
         self.child = child
         if self.child is None:
             self.child = NoneChild()
@@ -158,9 +166,9 @@ class RobotActor(object):
 
     def signal(self, msg, **kwargs):
         """broadcast signal message ``msg`` to all child classes."""
+        self._signal(msg, **kwargs)
         if hasattr(self.child, 'signal'):
             self.child.signal(msg, **kwargs)
-        self._signal(msg, **kwargs)
 
     def _signal(self, msg, **kwargs):
         """Template method for subclasses. Overload this method to enable signal receiving."""
@@ -249,12 +257,14 @@ class _RobotCollector_h5py(RobotActor):
         A *dict* is expected. Default is None (no headers).
 
     """
-    def __init__(self, child, expfile, headers=None, vars=None, warn=True):
+    def __init__(self, child, expfile, headers=None, vars=None, warn=True, new_episode_on_reset=False):
         super(_RobotCollector_h5py, self).__init__(child)
 
         self.headers = headers
         self.vars = vars
         self.warn = warn
+        self.new_episode_on_reset = new_episode_on_reset
+        self.new_episode = False
         
         # create experiment storage
         import h5py
@@ -301,7 +311,7 @@ class _RobotCollector_h5py(RobotActor):
                 continue
             if k not in self.grp:
                 maxshape = tuple([None] * len(epoch[k].shape))
-                self.grp.create_dataset(k, data=epoch[k], chunks=True, maxshape=maxshape)
+                self.grp.create_dataset(k, data=epoch[k], chunks=True, maxshape=maxshape, dtype=epoch[k].dtype)
             else:
                 N = epoch[k].shape[0]
                 K = self.grp[k].shape[0]
@@ -309,14 +319,19 @@ class _RobotCollector_h5py(RobotActor):
                 self.grp[k][K:] = epoch[k]
 
         self.fh.flush()
+        
+        if self.new_episode:
+            self.new_episode = False
+            self._create_group(str(int(self.grp_name)+1))
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
     def _signal(self, msg, **kwargs):
         super(_RobotCollector_h5py, self)._signal(msg, **kwargs)
-        if isinstance(msg, str) and msg=='new_episode':
+        if isinstance(msg, str) and msg=='new_episode' or (msg=='reset' and self.new_episode_on_reset):
             # start a new episode, i.e. create a new group in expfile
-            # and store all new epochs there:
-            self._create_group(str(int(self.grp_name)+1))
+            # and store all new epochs there.
+            # But do it after next control step:
+            self.new_episode = True
 
 
 class _RobotCollector_pytables(RobotActor):
@@ -460,7 +475,7 @@ class GaitIndexCollector(RobotActor):
 
     def _set_header(self, gait_names):
         if hasattr(self, 'set_header'):
-            self.set_header('gait_names', np.array(gait_names))
+            self.set_header('gait_names', np.array(map(str,gait_names)))
 
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
@@ -508,20 +523,20 @@ class TumbleCollector(RobotActor):
         super(TumbleCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
-        self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+        self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,], dtype=bool)
         self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
 
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             epoch['tumble'] = self._tumbled
-            self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+            self._tumbled = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,], dtype=bool)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
     def _signal(self, msg, **kwargs):
         super(TumbleCollector, self)._signal(msg, **kwargs)
         if msg=='tumbled':
             current_time = kwargs['current_time']
-            self._tumbled[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
+            self._tumbled[(current_time/self.sampling_period_ms) % (self.ctrl_period_ms/self.sampling_period_ms) - 1] = True
 
 
 class ResetCollector(RobotActor):
@@ -530,20 +545,63 @@ class ResetCollector(RobotActor):
         super(ResetCollector, self).__init__(child, **kwargs)
         self.sampling_period_ms = sampling_period_ms
         self.ctrl_period_ms = ctrl_period_ms
-        self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+        self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,], dtype=bool)
         self.event_handler = lambda a,b,c,d:None # The usage of event_handler() is DEPRICATED! Use signal(msg, **kwargs) instead.
 
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         if time_start_ms:
             epoch['reset'] = self._reset
-            self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,])
+            self._reset = np.zeros([self.ctrl_period_ms/self.sampling_period_ms,], dtype=bool)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
     def _signal(self, msg, **kwargs):
         super(ResetCollector, self)._signal(msg, **kwargs)
         if msg=='reset':
             current_time = kwargs['current_time']
-            self._reset[current_time % (self.ctrl_period_ms/self.sampling_period_ms)] = 1
+            self._reset[(current_time/self.sampling_period_ms) % (self.ctrl_period_ms/self.sampling_period_ms) - 1] = True
+
+
+class TerrainCollector(RobotActor):
+    """Need either the terrain_file to extract the current terrain from GPS,
+    or needs the sampling- and control periods and a supervisor that signals the terrain idx.
+    """
+    def __init__(self, child, terrain_file=None, sampling_period_ms=None, ctrl_period_ms=None, **kwargs):
+        super(TerrainCollector, self).__init__(child, **kwargs)
+        if terrain_file is None:
+            self.has_supervisor = True
+            self.sampling_period_ms = sampling_period_ms
+            self.fs_ratio = ctrl_period_ms/self.sampling_period_ms
+            self._terrain = np.ones([self.fs_ratio,], dtype=int) * (-1)
+        else:
+            self.has_supervisor = False
+            self.terrain_idx, self.terrain_size, self.patch_size, _ = read_terrain_index(terrain_file)
+        self.current_terrain = -1
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        if self.has_supervisor:
+            if time_start_ms:
+                epoch['terrain_idx'] = self._terrain
+                self._terrain = np.ones([self.fs_ratio,], dtype=int) * (-1)
+            #print 'epoch terrains:', len(epoch['terrain_idx']), '\n', epoch['terrain_idx']
+        else:
+            position = zip(epoch['puppyGPS_x'], epoch['puppyGPS_y'])
+            epoch['terrain_idx'] = np.empty(len(position), dtype=int)
+            for i,pos in enumerate(position):
+                epoch['terrain_idx'][i] = get_terrain_index_from_position(pos, self.terrain_idx, self.terrain_size, self.patch_size)
+            #print 'epoch terrains:\n', '\n'.join(map(str, zip(position, epoch['terrain_idx'])))
+        return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
+    
+    def _signal(self, msg, **kwargs):
+        super(TerrainCollector, self)._signal(msg, **kwargs)
+        if self.has_supervisor:
+            if msg[:8]=='terrain=':
+                current_terrain = int(msg[8:])
+                if current_terrain != self.current_terrain:
+                    print 'terrain is', current_terrain
+                    self.current_terrain = current_terrain
+                current_time = kwargs['current_time']
+                #print 'time=',current_time, (current_time/self.sampling_period_ms) % self.fs_ratio-1, self.current_terrain, msg[10:]
+                self._terrain[(current_time/self.sampling_period_ms) % self.fs_ratio - 1] = current_terrain # note that last sample of epoch has index -1
 
 
 class OnlinePrinter(RobotActor):
@@ -586,17 +644,19 @@ class OnlinePlotter(RobotActor):
     .. warning: Highly experimental code, is not properly working!
 
     Known issues:
-    * Thread is not properly cancelled. This might be because when you press 'Stop' in webots, the thread stops (hence can't be joined). This also interfers with simulation restarting. Hotfix: After termination, use `pkill -f python.*<dir name>.*robot\.py`
+    * Thread is not properly cancelled. This might be because when you press 'Stop' in webots, the thread stops (hence can't be joined). This also interferes with simulation restarting. Hotfix: After termination, use `pkill -f python.*<dir name>.*robot\.py`
     * Window redrawing is only done in an update, it's not a detached process itself. Hence reactivity is poor and also the window buttons can't be used (change view or save image).
     * Multiprocessing approach doesn't open a window
     * First episode is not plotted
     """
-    def __init__(self, child, var_list, **kwargs):
+    def __init__(self, child, var_list, max_window_len=300, window_fs=0.25, **kwargs):
         assert len(var_list) > 0
         super(OnlinePlotter, self).__init__(child, **kwargs)
 
         import threading
         import Queue
+        self.max_window_len = max_window_len
+        self.window_fs = window_fs
         self._thread_cancelled = False
         #self._thread_queue = multiprocessing.Queue(1)
         #self._thread_handle = multiprocessing.Process(target=self._plotter_loop, args=(self, var_list,))
@@ -614,40 +674,52 @@ class OnlinePlotter(RobotActor):
         import pylab as pl
         import Queue
         pl.ion()
-        fig, ax = pl.subplots(len(var_list), 1, True)
-        if len(var_list) == 1:
-            ax = [ax]
-        line = []
-        for i,v in enumerate(var_list):
-            ax[i].set_ylabel(v)
-            line.append(ax[i].plot([],[])[0])
-        ax[-1].set_xlabel('time')
-
+        initialized = False
         while not self._thread_cancelled:
             try:
                 #out.write('Waiting for data\n')
                 #out.flush()
-                epoch, time_start, time_end, step = self._thread_queue.get(True, 0.25)
+                epoch, time_start, time_end, step = self._thread_queue.get(True, self.window_fs)
             except Queue.Empty:
                 continue
             #out.write('Got data, updating plot\n')
             #out.flush()
+            if not initialized:
+                fig, ax = pl.subplots(len(var_list), 1, True)
+                if len(var_list) == 1:
+                    ax = [ax]
+                line = []
+                for i,v in enumerate(var_list):
+                    if isinstance(v, (list,tuple)):
+                        v = v[0]+'[%d]'%v[1]
+                        n_lines = 1
+                    else:
+                        n_lines = epoch[v].shape[1]
+                    ax[i].set_ylabel(v)
+                    line.append([ax[i].plot([],[])[0] for _ in range(n_lines)])
+                ax[-1].set_xlabel('time')
+                initialized = True
+                
 
             for i,v in enumerate(var_list):
-                dat = epoch[v]
+                if isinstance(v, (list,tuple)):
+                    dat = epoch[v[0]][:,v[1]:v[1]+1]
+                else:
+                    dat = epoch[v]
                 timescale = np.arange(time_start, time_end, step)
-                xdata = np.append(line[i].get_xdata(), timescale)
-                ydata = np.append(line[i].get_ydata(), dat)
-                # sliding window
-                # uncomment or set maxlen=len(xdata) for cumulative behaviour
-                maxlen = 300
-                xdata = xdata[-maxlen:]
-                ydata = ydata[-maxlen:]
-                print line[i].get_xdata().shape, line[i].get_ydata().shape, xdata.shape, ydata.shape, dat.shape
-                line[i].set_xdata(xdata)
-                line[i].set_ydata(ydata)
+                mini,maxi = np.inf, -np.inf
+                xdata = np.append(line[i][0].get_xdata(), timescale)
+                xdata = xdata[-self.max_window_len:]
+                for idx in range(dat.shape[1]):
+                    ydata = np.append(line[i][idx].get_ydata(), dat[:,idx])
+                    ydata = ydata[-self.max_window_len:]
+                    #print line[i][idx].get_xdata().shape, line[i][idx].get_ydata().shape, xdata.shape, ydata.shape, dat.shape
+                    line[i][idx].set_xdata(xdata)
+                    line[i][idx].set_ydata(ydata)
+                    mini = min(mini,ydata.min())
+                    maxi = max(maxi,ydata.max())
                 ax[i].set_xlim(xmin=xdata.min(), xmax=xdata.max())
-                ax[i].set_ylim(ymin=ydata.min(), ymax=ydata.max())
+                ax[i].set_ylim(ymin=mini, ymax=maxi)
             fig.canvas.draw()
 
             self._thread_queue.task_done()

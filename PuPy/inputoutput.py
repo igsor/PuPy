@@ -2,6 +2,9 @@
 
 Code for input/output handling
 
+Change log:
+    02.06.2014: fixed bug in functions (de)normalize_epoch (return value was wrong)
+
 """
 
 import warnings
@@ -138,7 +141,7 @@ class Normalization(object):
         else:
             new_epoch = epoch
         
-        return epoch
+        return new_epoch
     
     def denormalize_epoch(self, epoch):
         """Denormalize all values in the :py:keyword:`dict` ``epoch``,
@@ -150,7 +153,7 @@ class Normalization(object):
         else:
             new_epoch = epoch
             
-        return epoch
+        return new_epoch
     
     def normalize_value(self, sensor, value):
         """Return the normalized ``value``, with respect to ``sensor``."""
