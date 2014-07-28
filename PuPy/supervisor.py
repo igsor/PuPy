@@ -260,7 +260,15 @@ class RespawnAction(SupervisorAction):
 
 class QuitAction(SupervisorAction):
     """Quit webots"""
+    def __init__(self, **kwargs):
+        self.grace_time = kwargs.pop('grace_time_ms', 0)
+        super(QuitAction, self).__init__(**kwargs)
+    
     def action(self, supervisor, msg):
+        # let grace period pass
+        supervisor.step(self.grace_time)
+        
+        # send quit command to webots
         print "Quit simulation (%s)" % (msg)
         supervisor.simulationQuit(0)
 
@@ -295,8 +303,8 @@ def RespawnOnDemand(**kwargs):
     return ('respawn_on_demand', RespawnAction(**kwargs))
 def RevertOnDemand(**kwargs):
     return ('revert_on_demand', RevertAction(**kwargs))
-def QuitOnDemand():
-    return ('quit_on_demand', QuitAction())
+def QuitOnDemand(**kwargs):
+    return ('quit_on_demand', QuitAction(**kwargs))
 NotifyTumbled = supervisorCheckMixin(TumbledCheck, NotifyAction)
 RevertTumbled = supervisorCheckMixin(TumbledCheck, RevertAction)
 RevertMaxIter = supervisorCheckMixin(MaxIterCheck, RevertAction)

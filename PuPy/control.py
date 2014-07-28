@@ -5,7 +5,8 @@ Change log:
 2014-05-06: load_gaits returns a list of Gait instances also when no names are given.
 2014-05-07: changed the signal chain to start with top-most Actor and propagate down the childs afterwards.
 2014-05-07: included a reset-listening option in _RobotCollector_h5py.
-2014-05-07: _RobotCollector_h5py recognizes dtype of data.
+2014-05-07: _RobotCollector_h5py recognizes dtype of data. It writes the webots time into the headers of groups.
+2014-06-04: Added SignalCollector(RobotCollector) to record all signal messages for offline simulation
 """
 import random
 from math import sin, pi
@@ -188,14 +189,15 @@ class PuppyActor(RobotActor):
 
 class RandomGaitControl(RobotActor):
     """From a list of available gaits, randomly select one."""
-    def __init__(self, gaits):
-        super(RandomGaitControl, self).__init__()
+    def __init__(self, gaits, **kwargs):
+        super(RandomGaitControl, self).__init__(**kwargs)
         self.gaits = gaits[:]
         self.gait = None
 
     def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
         self.gait = random.choice(self.gaits)
-        print self.gait
+        if self.verbose:
+            print self.gait
         return self.gait.iter(time_start_ms, step_size_ms)
 
     def _get_initial_targets(self, time_start_ms, time_end_ms, step_size_ms):
@@ -257,8 +259,8 @@ class _RobotCollector_h5py(RobotActor):
         A *dict* is expected. Default is None (no headers).
 
     """
-    def __init__(self, child, expfile, headers=None, vars=None, warn=True, new_episode_on_reset=False):
-        super(_RobotCollector_h5py, self).__init__(child)
+    def __init__(self, child, expfile, headers=None, vars=None, warn=True, new_episode_on_reset=False, **kwargs):
+        super(_RobotCollector_h5py, self).__init__(child, **kwargs)
 
         self.headers = headers
         self.vars = vars
@@ -269,16 +271,19 @@ class _RobotCollector_h5py(RobotActor):
         # create experiment storage
         import h5py
         self.fh = h5py.File(expfile,'a')
-        self._create_group(str(len(self.fh.keys())))
+        self._create_group(str(len(self.fh.keys())), 0)
 
-    def _create_group(self, grp_name):
+    def _create_group(self, grp_name, time_webots_ms=None):
         self.grp_name = grp_name
         self.grp = self.fh.create_group(self.grp_name)
         self.set_header('time', time.ctime())
+        if time_webots_ms is not None:
+            self.set_header('time_webots_ms', time_webots_ms)
         if self.headers is not None:
             for k in self.headers:
                 self.set_header(k, self.headers[k])
-        print "Using storage", self.grp_name
+        if self.verbose:
+            print "Using storage", self.grp_name
 
     def set_header(self, name, data):
         """Add custom header ``data`` to the current group. The data is
@@ -310,8 +315,12 @@ class _RobotCollector_h5py(RobotActor):
                     warnings.warn('logging of %s requested but not present in epoch. skipping...'%k)
                 continue
             if k not in self.grp:
-                maxshape = tuple([None] * len(epoch[k].shape))
-                self.grp.create_dataset(k, data=epoch[k], chunks=True, maxshape=maxshape, dtype=epoch[k].dtype)
+                if isinstance(epoch[k], str):
+                    self.grp.create_dataset(k, data=epoch[k])
+                else:
+                    maxshape = tuple([None] * (hasattr(epoch[k],'shape') and [len(epoch[k].shape)] or [1])[0])
+                    dtype = (hasattr(epoch[k],'dtype') and [epoch[k].dtype] or [None])[0]
+                    self.grp.create_dataset(k, data=epoch[k], chunks=True, maxshape=maxshape, dtype=dtype)
             else:
                 N = epoch[k].shape[0]
                 K = self.grp[k].shape[0]
@@ -322,7 +331,7 @@ class _RobotCollector_h5py(RobotActor):
         
         if self.new_episode:
             self.new_episode = False
-            self._create_group(str(int(self.grp_name)+1))
+            self._create_group(str(int(self.grp_name)+1), time_start_ms)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
     def _signal(self, msg, **kwargs):
@@ -357,8 +366,8 @@ class _RobotCollector_pytables(RobotActor):
         A *dict* is expected. Default is None (no headers).
 
     """
-    def __init__(self, child, expfile, headers=None):
-        super(_RobotCollector_pytables, self).__init__(child)
+    def __init__(self, child, expfile, headers=None, **kwargs):
+        super(_RobotCollector_pytables, self).__init__(child, **kwargs)
 
         # create experiment storage
         import tables
@@ -371,7 +380,8 @@ class _RobotCollector_pytables(RobotActor):
             for k in headers:
                 self.grp._f_setattr(k, headers[k])
 
-        print "Using storage", name
+        if self.verbose:
+            print "Using storage", name
 
     def __del__(self):
         self.fh.close()
@@ -432,6 +442,27 @@ class RobotCollector(_RobotCollector_h5py):
         A *dict* is expected. Default is None (no headers).
     """
     pass
+
+
+class SignalCollector(RobotCollector):
+    """Collect the messages sent via signal() with timestamp as key (float!).
+    """
+    def __init__(self, child, expfile, headers=None, vars=None, warn=True, new_episode_on_reset=False):
+        super(SignalCollector, self).__init__(child, expfile, headers=None, vars=vars, warn=False, new_episode_on_reset=new_episode_on_reset)
+        self._queue = {}
+    
+    def _signal(self, msg, **kwargs):
+        super(SignalCollector, self)._signal(msg, **kwargs)
+        k=0.0
+        while str(kwargs['current_time']+k) in self._queue:
+            k += 0.01
+        self._queue[str(kwargs['current_time']+k)] = msg
+    
+    def __call__(self, epoch, time_start_ms, time_end_ms, step_size_ms):
+        self.vars = self._queue.keys()
+        epoch.update(self._queue)
+        self._queue = {}
+        return super(SignalCollector, self).__call__(epoch, time_start_ms, time_end_ms, step_size_ms)
 
 
 class PuppyCollector(RobotCollector):
@@ -597,7 +628,8 @@ class TerrainCollector(RobotActor):
             if msg[:8]=='terrain=':
                 current_terrain = int(msg[8:])
                 if current_terrain != self.current_terrain:
-                    print 'terrain is', current_terrain
+                    if self.verbose:
+                        print 'terrain is', current_terrain
                     self.current_terrain = current_terrain
                 current_time = kwargs['current_time']
                 #print 'time=',current_time, (current_time/self.sampling_period_ms) % self.fs_ratio-1, self.current_terrain, msg[10:]
@@ -746,3 +778,5 @@ class OnlinePlotter(RobotActor):
             self._thread_queue.put((epoch, time_start_ms, time_end_ms, step_size_ms), True)
         return self.child(epoch, time_start_ms, time_end_ms, step_size_ms)
 
+
+    

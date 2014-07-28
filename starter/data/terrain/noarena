@@ -15,7 +15,7 @@ WorldInfo {
   }
   contactProperties [
     ContactProperties {
-      coulombFriction 10
+      coulombFriction 9
     }
     ContactProperties {
       material1 "BLUE_FOIL_MATERIAL"

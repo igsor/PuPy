@@ -4,10 +4,12 @@ Code for input/output handling
 
 Change log:
     02.06.2014: fixed bug in functions (de)normalize_epoch (return value was wrong)
+    06.06.2014: added NormalizationDummy and NormalizationTanh; added Normalization.derviative() method
 
 """
 
 import warnings
+import numpy as np
 
 def clear_empty_groups(pth):
     """Remove HDF5 groups with no datasets from ``pth``. Return a list
@@ -22,6 +24,17 @@ def clear_empty_groups(pth):
     
     f.close()
     return deleted
+
+class NormalizationDummy(object):
+    def set(self, sensor, offset, scale): pass
+    def get(self, sensor): return (0.0, 1.0)
+    def normalize_epoch(self, epoch): return epoch
+    def denormalize_epoch(self, epoch): return epoch
+    def normalize_value(self, sensor, value): return value
+    def denormalize_value(self, sensor, value): return value
+    def __contains__(self, key): return False
+    def derivative(self, sensor, normalized_value):return 1.0
+        
 
 class Normalization(object):
     """Supply normalization routines for sensor data. The normalization
@@ -235,3 +248,72 @@ class Normalization(object):
         if sensor is not None:
             self._sensor_mapping[sensor] = (offset, scale)
         return offset, scale
+    
+    def derivative(self, sensor, normalized_value):
+        """Return the derivative of this normalization at the given value.
+        """
+        if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to denormalize unknown sensor (%s)'%sensor)
+            offset, scale = (0.0, 1.0)
+        else:
+            offset, scale = self._sensor_mapping[sensor]
+        return 1.0 / scale
+
+
+class NormalizationTanh(Normalization):
+    
+    
+    def normalize_epoch(self, epoch):
+        """Normalize all values in the :py:keyword:`dict` ``epoch``,
+        where the key is regarded as sensor name."""
+        if len(self._sensor_mapping) > 0:
+            new_epoch = {}
+            for lbl in epoch:
+                new_epoch[lbl] = self.normalize_value(lbl, epoch[lbl])
+        else:
+            new_epoch = epoch
+        
+        return new_epoch
+    
+    def denormalize_epoch(self, epoch):
+        """Denormalize all values in the :py:keyword:`dict` ``epoch``,
+        where the key is regarded as sensor name."""
+        if len(self._sensor_mapping) > 0:
+            new_epoch = {}
+            for lbl in epoch:
+                new_epoch[lbl] = self.denormalize_value(lbl, epoch[lbl])
+        else:
+            new_epoch = epoch
+            
+        return new_epoch
+    
+    def normalize_value(self, sensor, value):
+        """Return the normalized ``value``, with respect to ``sensor``."""
+        if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to normalize unknown sensor (%s)'%sensor)
+            return np.tanh(value)
+        
+        offset, scale = self._sensor_mapping[sensor]
+        return np.tanh((value - offset) / scale)
+    
+    def denormalize_value(self, sensor, value):
+        """Return the denormalized ``value``, with respect to
+        ``sensor``."""
+        if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to denormalize unknown sensor (%s)'%sensor)
+            return np.arctanh(value)
+        
+        offset, scale = self._sensor_mapping[sensor]
+        return scale * np.arctanh(value) + offset
+    
+    def derivative(self, sensor, normalized_value):
+        """Return the derivative of this normalization at the given value.
+        """
+        if sensor not in self._sensor_mapping:
+            warnings.warn('Tried to denormalize unknown sensor (%s)'%sensor)
+            offset, scale = (0.0, 1.0)
+        else:
+            offset, scale = self._sensor_mapping[sensor]
+        return (1.0 - normalized_value**2) / scale
+    
+    
